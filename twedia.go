@@ -47,12 +47,10 @@ type Artists struct {
 var artists Artists
 
 func init() {
-	// TODO: don't hardcode url
-	url := "https://lyrenhex.com/stream-content/music.json"
 	c := http.Client{
 		Timeout: time.Second * 5,
 	}
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequest(http.MethodGet, os.Getenv("TWITCH_SONG_LINK_DATABASE_URL"), nil)
 	if err != nil {
 		log.Fatal(err)
 	}
