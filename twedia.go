@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	sampleRate beep.SampleRate = 44100
+	sampleRate beep.SampleRate = 48000
 	bufferSize time.Duration   = time.Second / 10
 )
 
