@@ -115,12 +115,12 @@ func main() {
 
 		// open the song for playing
 		s := string(os.PathSeparator)
-		f, err := os.Open(os.Getenv("TWITCH_MUSIC_DIR") + s + artist.Artist + s + album.Name + s + song.Title + ".mp3")
+		mf, err := os.Open(os.Getenv("TWITCH_MUSIC_DIR") + s + artist.Artist + s + album.Name + s + song.Title + ".mp3")
 		if err != nil {
 			log.Println(err)
 			continue
 		}
-		streamer, format, err := mp3.Decode(f)
+		streamer, format, err := mp3.Decode(mf)
 		if err != nil {
 			log.Fatal(err)
 		}
