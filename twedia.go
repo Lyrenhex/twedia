@@ -70,7 +70,11 @@ func init() {
 		log.Fatal(err)
 	}
 
+	// initialise the speaker to the sampleRate defined in constants
 	speaker.Init(sampleRate, sampleRate.N(bufferSize))
+
+	// Seed the random Source such that we don't always listen to Blessed are the Teamakers...
+	rand.Seed(time.Now().UnixNano())
 
 	log.Println("Init routine complete.")
 }
