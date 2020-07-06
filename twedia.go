@@ -111,8 +111,6 @@ func main() {
 		// and a random song from that album
 		song := album.Songs[rand.Intn(len(album.Songs))]
 
-		f.WriteString(fmt.Sprintf("\n%s, by %s", song.Title, artist.Artist))
-
 		// open the song for playing
 		s := string(os.PathSeparator)
 		mf, err := os.Open(os.Getenv("TWITCH_MUSIC_DIR") + s + artist.Artist + s + album.Name + s + song.Title + ".mp3")
@@ -133,6 +131,8 @@ func main() {
 			done <- true
 		})))
 
+		log.Println(fmt.Sprintf("Playing %s, by %s", song.Title, artist.Artist))
+		f.WriteString(fmt.Sprintf("\n%s, by %s", song.Title, artist.Artist))
 		t.Say(os.Getenv("TWITCH_CHANNEL_NAME"), fmt.Sprintf("Playing %s by %s. Listen on YouTube: %s", song.Title, artist.Artist, song.URL))
 
 		<-done
