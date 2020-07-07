@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -8,6 +9,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/faiface/beep"
@@ -45,6 +47,7 @@ type Artists struct {
 }
 
 var artists Artists
+var t *twitch.Client
 
 func init() {
 	c := http.Client{
@@ -79,28 +82,35 @@ func init() {
 	log.Println("Init routine complete.")
 }
 
-func main() {
-	// Set up Twitch bot
-	t := twitch.NewClient(os.Getenv("TWITCH_BOT_USERNAME"), os.Getenv("TWITCH_OAUTH_TOKEN"))
-	t.Join(os.Getenv("TWITCH_CHANNEL_NAME"))
-
-	t.OnConnect(func() {
-		log.Println("Connected to Twitch chat")
-	})
-
-	go func() {
-		err := t.Connect()
-		if err != nil {
-			panic(err)
-		}
-	}()
-
-	f, err := os.Create(os.Getenv("TWITCH_MUSIC_FILE"))
+func play(artist Artist, album Album, song Song, f *os.File) error {
+	// open the song for playing
+	s := string(os.PathSeparator)
+	mf, err := os.Open(os.Getenv("TWITCH_MUSIC_DIR") + s + artist.Artist + s + album.Name + s + song.Title + ".mp3")
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
-	defer f.Close()
+	streamer, format, err := mp3.Decode(mf)
+	if err != nil {
+		return err
+	}
+	defer streamer.Close()
 
+	log.Println(fmt.Sprintf("Playing %s, by %s", song.Title, artist.Artist))
+	f.WriteString(fmt.Sprintf("\n%s, by %s", song.Title, artist.Artist))
+	t.Say(os.Getenv("TWITCH_CHANNEL_NAME"), fmt.Sprintf("Playing %s by %s. Listen on YouTube: %s", song.Title, artist.Artist, song.URL))
+
+	resampled := beep.Resample(4, format.SampleRate, sampleRate, streamer)
+
+	done := make(chan bool)
+	speaker.Play(beep.Seq(resampled, beep.Callback(func() {
+		done <- true
+	})))
+
+	<-done
+	return nil
+}
+
+func playRnd(f *os.File) {
 	for {
 		// select a random artist
 		artist := artists.Artists[rand.Intn(len(artists.Artists))]
@@ -111,30 +121,77 @@ func main() {
 		// and a random song from that album
 		song := album.Songs[rand.Intn(len(album.Songs))]
 
-		// open the song for playing
-		s := string(os.PathSeparator)
-		mf, err := os.Open(os.Getenv("TWITCH_MUSIC_DIR") + s + artist.Artist + s + album.Name + s + song.Title + ".mp3")
+		err := play(artist, album, song, f)
 		if err != nil {
 			log.Println(err)
 			continue
 		}
-		streamer, format, err := mp3.Decode(mf)
+	}
+}
+
+func main() {
+	r := make(chan bool)
+
+	f, err := os.Create(os.Getenv("TWITCH_MUSIC_FILE"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+
+	// Set up Twitch bot
+	t = twitch.NewClient(os.Getenv("TWITCH_BOT_USERNAME"), os.Getenv("TWITCH_OAUTH_TOKEN"))
+	t.Join(os.Getenv("TWITCH_CHANNEL_NAME"))
+
+	t.OnConnect(func() {
+		log.Println("Connected to Twitch chat")
+		r <- true
+	})
+
+	go func() {
+		err := t.Connect()
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
-		defer streamer.Close()
+	}()
 
-		resampled := beep.Resample(4, format.SampleRate, sampleRate, streamer)
+	<-r
 
-		done := make(chan bool)
-		speaker.Play(beep.Seq(resampled, beep.Callback(func() {
-			done <- true
-		})))
+	fmt.Print("Specify whether to play The Tea Song or if random: [RANDOM/tea] ")
 
-		log.Println(fmt.Sprintf("Playing %s, by %s", song.Title, artist.Artist))
-		f.WriteString(fmt.Sprintf("\n%s, by %s", song.Title, artist.Artist))
-		t.Say(os.Getenv("TWITCH_CHANNEL_NAME"), fmt.Sprintf("Playing %s by %s. Listen on YouTube: %s", song.Title, artist.Artist, song.URL))
+	var opt string
+	for {
+		reader := bufio.NewReader(os.Stdin)
+		opt, err = reader.ReadString('\n')
+		if err == nil {
+			break
+		}
+	}
+	opt = strings.ToLower(strings.Replace(strings.Replace(opt, "\n", "", -1), "\r", "", -1))
+	if strings.Compare(opt, "tea") == 0 {
+		var artist Artist
+		var album Album
+		var song Song
+		for _, ar := range artists.Artists {
+			if ar.Artist != "Miscellaneous" {
+				continue
+			}
+			artist = ar
+			for _, al := range ar.Albums {
+				if al.Name != "Yorkshire Tea" {
+					continue
+				}
+				album = al
+				for _, s := range al.Songs {
+					if s.Title != "The Tea Song" {
+						continue
+					}
+					song = s
+				}
+			}
+		}
 
-		<-done
+		play(artist, album, song, f)
+	} else {
+		playRnd(f)
 	}
 }
