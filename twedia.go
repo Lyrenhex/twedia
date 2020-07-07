@@ -194,4 +194,7 @@ func main() {
 	} else {
 		playRnd(f)
 	}
+
+	// clear the contents of the Now Playing file
+	os.Create(os.Getenv("TWITCH_MUSIC_FILE"))
 }
