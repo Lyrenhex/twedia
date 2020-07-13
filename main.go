@@ -90,6 +90,7 @@ func playRnd(f *os.File) {
 				artist = a
 				break
 			}
+			r -= a.TotalSongs
 		}
 
 		// now select a random album by that artist

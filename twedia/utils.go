@@ -3,8 +3,8 @@ package twedia
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -80,6 +80,8 @@ func SelectSong(artists *Music) (*Artist, *Album, *Song) {
 	var sAr string
 	var err error
 	for artist == nil {
+		fmt.Print("Artist name: ")
+
 		reader := bufio.NewReader(os.Stdin)
 		sAr, err = reader.ReadString('\n')
 		if err != nil {
@@ -88,15 +90,15 @@ func SelectSong(artists *Music) (*Artist, *Album, *Song) {
 		sAr = strings.ToLower(strings.Replace(strings.Replace(sAr, "\n", "", -1), "\r", "", -1))
 
 		for _, ar := range (*artists).Artists {
-			if strings.ToLower(ar.Artist) != sAr {
-				log.Println("Could not find that artist.")
-				continue
+			if strings.ToLower(ar.Artist) == sAr {
+				artist = &ar
 			}
-			artist = &ar
 		}
 	}
 	var sAl string
 	for album == nil {
+		fmt.Print("Album name: ")
+
 		reader := bufio.NewReader(os.Stdin)
 		sAl, err = reader.ReadString('\n')
 		if err != nil {
@@ -105,15 +107,15 @@ func SelectSong(artists *Music) (*Artist, *Album, *Song) {
 		sAl = strings.ToLower(strings.Replace(strings.Replace(sAl, "\n", "", -1), "\r", "", -1))
 
 		for _, al := range artist.Albums {
-			if strings.ToLower(al.Name) != sAl {
-				log.Println("Could not find that album.")
-				continue
+			if strings.ToLower(al.Name) == sAl {
+				album = &al
 			}
-			album = &al
 		}
 	}
 	var sSong string
 	for song == nil {
+		fmt.Print("Song name: ")
+
 		reader := bufio.NewReader(os.Stdin)
 		sSong, err = reader.ReadString('\n')
 		if err != nil {
@@ -122,11 +124,9 @@ func SelectSong(artists *Music) (*Artist, *Album, *Song) {
 		sSong = strings.ToLower(strings.Replace(strings.Replace(sSong, "\n", "", -1), "\r", "", -1))
 
 		for _, s := range album.Songs {
-			if strings.ToLower(s.Title) != sSong {
-				log.Println("Could not find that song.")
-				continue
+			if strings.ToLower(s.Title) == sSong {
+				song = &s
 			}
-			song = &s
 		}
 	}
 
