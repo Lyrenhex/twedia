@@ -36,6 +36,7 @@ type Music struct {
 	TotalSongs int
 }
 
+// GetSongs populates the provided Music object with the song database found at the URL specified in the TWITCH_SONG_LINK_DATABASE_URL environment variable
 func GetSongs(a *Music) error {
 	c := http.Client{
 		Timeout: time.Second * 5,
@@ -72,6 +73,7 @@ func GetSongs(a *Music) error {
 	return nil
 }
 
+// SelectSong asks the user for a song from the artists Music object, and returns pointers to the selected Artist, Album, and Song object within
 func SelectSong(artists *Music) (*Artist, *Album, *Song) {
 	var artist *Artist
 	var album *Album
@@ -92,6 +94,7 @@ func SelectSong(artists *Music) (*Artist, *Album, *Song) {
 		for _, ar := range (*artists).Artists {
 			if strings.ToLower(ar.Artist) == sAr {
 				artist = &ar
+				break
 			}
 		}
 	}
@@ -109,6 +112,7 @@ func SelectSong(artists *Music) (*Artist, *Album, *Song) {
 		for _, al := range artist.Albums {
 			if strings.ToLower(al.Name) == sAl {
 				album = &al
+				break
 			}
 		}
 	}
@@ -126,6 +130,7 @@ func SelectSong(artists *Music) (*Artist, *Album, *Song) {
 		for _, s := range album.Songs {
 			if strings.ToLower(s.Title) == sSong {
 				song = &s
+				break
 			}
 		}
 	}

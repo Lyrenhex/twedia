@@ -33,6 +33,7 @@ type twitchPubSub struct {
 	Error string     `json:"error"`
 }
 
+// GetChannelID retrieves the channel ID for the OAuth token defined in the "TWITCH_PUBSUB_OAUTH_TOKEN" environment variable, and returns it as a string
 func GetChannelID() string {
 	chanInfo := &twitchAPI5Resp{}
 
@@ -54,6 +55,7 @@ func GetChannelID() string {
 	return chanInfo.ID
 }
 
+// ListenChannelPoints starts a WebSocket listening to the Twitch PubSub API for Channel Point redemptions, which calls callback with the provided file handle and the reward title as a string
 func ListenChannelPoints(cID string, f *os.File, callback func(string, *os.File)) {
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
