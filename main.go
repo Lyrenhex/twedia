@@ -42,7 +42,7 @@ func init() {
 	// Seed the random Source such that we don't always listen to Blessed are the Teamakers...
 	rand.Seed(time.Now().UnixNano())
 
-	log.Println(`Twedia Music Manager
+	fmt.Println(`Twedia Music Manager
 	
 Commands:
 	start : start playing random music
