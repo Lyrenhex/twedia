@@ -36,7 +36,8 @@ func init() {
 	// initialise the speaker to the sampleRate defined in constants
 	speaker.Init(sampleRate, sampleRate.N(bufferSize))
 
-	channelID = twedia.GetChannelID()
+	token := twedia.GetOAuthToken()
+	channelID = twedia.GetChannelID(token)
 
 	// Seed the random Source such that we don't always listen to Blessed are the Teamakers...
 	rand.Seed(time.Now().UnixNano())
@@ -131,7 +132,9 @@ func rewardCallback(rName string, f *os.File) {
 			}
 		}
 
-		streamer.Close()
+		if streamer != nil {
+			streamer.Close()
+		}
 		playing = true
 		go play(artist, album, song, f)
 	}
@@ -164,7 +167,7 @@ func main() {
 
 	<-r
 
-	// go twedia.ListenChannelPoints(channelID, f, rewardCallback)
+	go twedia.ListenChannelPoints(channelID, f, rewardCallback)
 
 	for {
 		fmt.Print("> ")

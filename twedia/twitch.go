@@ -1,16 +1,22 @@
 package twedia
 
 import (
+	"bufio"
+	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"math/rand"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/pkg/browser"
 )
 
 const twitchPubSubAPI string = "wss://pubsub-edge.twitch.tv"
@@ -21,10 +27,21 @@ type twitchAPI5Resp struct {
 type twitchReward struct {
 	Title string `json:"title"`
 }
+type twitchRedemption struct {
+	Reward twitchReward `json:"reward"`
+}
+type twitchMsgData struct {
+	Redemption twitchRedemption `json:"redemption"`
+}
+type twitchMessage struct {
+	Type string        `json:"type"`
+	Data twitchMsgData `json:"data"`
+}
 type twitchData struct {
-	Topics    []string     `json:"topics"`
-	AuthToken string       `json:"auth_token"`
-	Reward    twitchReward `json:"reward"`
+	Topics    []string `json:"topics"`
+	AuthToken string   `json:"auth_token"`
+	Topic     string   `json:"topic"`
+	Message   string   `json:"message"`
 }
 type twitchPubSub struct {
 	Type  string     `json:"type"`
@@ -33,14 +50,52 @@ type twitchPubSub struct {
 	Error string     `json:"error"`
 }
 
-// GetChannelID retrieves the channel ID for the OAuth token defined in the "TWITCH_PUBSUB_OAUTH_TOKEN" environment variable, and returns it as a string
-func GetChannelID() string {
+func GetOAuthToken() string {
+	token, set := os.LookupEnv("TWITCH_PUBSUB_OAUTH_TOKEN")
+	if set {
+		return token
+	}
+
+	browser.OpenURL("https://id.twitch.tv/oauth2/authorize?client_id=" + os.Getenv("TWITCH_CLIENT_ID") + "&redirect_uri=http://localhost&response_type=token&scope=channel_read%20channel:read:redemptions")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, "Please see token in the address bar and copy to Twedia.")
+		cancel()
+	})
+	srv := &http.Server{Addr: ":80"}
+	go srv.ListenAndServe()
+	<-ctx.Done()
+	if err := srv.Shutdown(ctx); err != nil && err != context.Canceled {
+		log.Println(err)
+	}
+
+	fmt.Print("Please enter OAuth token: ")
+
+	var err error
+	for {
+		reader := bufio.NewReader(os.Stdin)
+		token, err = reader.ReadString('\n')
+		if err == nil {
+			break
+		}
+	}
+	token = strings.Replace(strings.Replace(token, "\n", "", -1), "\r", "", -1)
+
+	os.Setenv("TWITCH_PUBSUB_OAUTH_TOKEN", token)
+
+	return token
+}
+
+// GetChannelID retrieves the channel ID for the OAuth token provided, and returns it as a string
+func GetChannelID(token string) string {
 	chanInfo := &twitchAPI5Resp{}
 
 	client := &http.Client{}
 	req, _ := http.NewRequest("GET", "https://api.twitch.tv/kraken/channel", nil)
 	req.Header.Add("Accept", "application/vnd.twitchtv.v5+json")
-	req.Header.Add("Authorization", "OAuth "+os.Getenv("TWITCH_PUBSUB_OAUTH_TOKEN"))
+	req.Header.Add("Authorization", "OAuth "+token)
+	req.Header.Add("Client-ID", os.Getenv("TWITCH_CLIENT_ID"))
 	resp, err := client.Do(req)
 	if err != nil {
 		panic(err)
@@ -76,7 +131,7 @@ func ListenChannelPoints(cID string, f *os.File, callback func(string, *os.File)
 				Topics: []string{
 					"channel-points-channel-v1." + cID,
 				},
-				AuthToken: os.Getenv("TWITCH_OAUTH_TOKEN"),
+				AuthToken: os.Getenv("TWITCH_PUBSUB_OAUTH_TOKEN"),
 			},
 		}
 		listenReqJSON, _ := json.Marshal(listenReq)
@@ -117,11 +172,17 @@ func ListenChannelPoints(cID string, f *os.File, callback func(string, *os.File)
 			}
 			switch resp.Type {
 			case "RESPONSE":
-				if resp.Error != "" {
+				if resp.Error == "ERR_BADAUTH" {
+					GetOAuthToken()
+				} else if resp.Error != "" {
 					log.Println("PubSub API error: ", resp.Error)
 				}
-			case "reward-redeemed":
-				callback(resp.Data.Reward.Title, f)
+			case "MESSAGE":
+				message := &twitchMessage{}
+				json.Unmarshal([]byte(resp.Data.Message), message)
+				if message.Type == "reward-redeemed" {
+					callback(message.Data.Redemption.Reward.Title, f)
+				}
 			}
 		}
 	}
