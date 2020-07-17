@@ -50,6 +50,8 @@ type twitchPubSub struct {
 	Error string     `json:"error"`
 }
 
+// GetOAuthToken gets a User OAuth Token from the Twitch API v5 and returns it as a string.
+// This function needs further work: it is not fully automated, requiring user involvement (which also has an ugly UX)
 func GetOAuthToken() string {
 	token, set := os.LookupEnv("TWITCH_PUBSUB_OAUTH_TOKEN")
 	if set {

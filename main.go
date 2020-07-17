@@ -114,6 +114,9 @@ func playRnd(f *os.File) {
 	}
 }
 
+// TODO: eventually find a method by which to generalise this function.
+// ideally, we want some kind of text-file interface by which to define songs
+// to play / actions to fulfil based on the reward data...
 func rewardCallback(rName string, f *os.File) {
 	if strings.ToLower(rName) == "play the tea song" {
 		var artist twedia.Artist
