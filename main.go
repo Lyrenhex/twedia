@@ -78,6 +78,12 @@ func play(artist twedia.Artist, album twedia.Album, song twedia.Song, f *os.File
 	})))
 
 	<-done
+
+	// clear the current song from the now playing file list
+	// (this implementation will double line count but is otherwise
+	// reasonably cheap from a storage perspective)
+	f.WriteString("\n")
+
 	return nil
 }
 
