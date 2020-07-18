@@ -24,13 +24,27 @@ const twitchPubSubAPI string = "wss://pubsub-edge.twitch.tv"
 type twitchAPI5Resp struct {
 	ID string `json:"_id"`
 }
+type twitchUser struct {
+	ID          string `json:"id"`
+	Login       string `json:"login"`
+	DisplayName string `json:"display_name"`
+}
 type twitchReward struct {
+	ID string `json:"id"`
+
 	Title string `json:"title"`
 }
 type twitchRedemption struct {
-	Reward twitchReward `json:"reward"`
+	ID         string       `json:"id"`
+	User       twitchUser   `json:"user"`
+	ChannelID  string       `json:"channel_id"`
+	RedeemedAt time.Time    `json:"redeemed_at"`
+	Reward     twitchReward `json:"reward"`
+	UserInput  string       `json:"user_input"`
+	Status     string       `json:"status"`
 }
 type twitchMsgData struct {
+	Timestamp  time.Time        `json:"timestamp"`
 	Redemption twitchRedemption `json:"redemption"`
 }
 type twitchMessage struct {
@@ -113,7 +127,7 @@ func GetChannelID(token string) string {
 }
 
 // ListenChannelPoints starts a WebSocket listening to the Twitch PubSub API for Channel Point redemptions, which calls callback with the provided file handle and the reward title as a string
-func ListenChannelPoints(cID string, f *os.File, callback func(string, *os.File)) {
+func ListenChannelPoints(cID string, callback func(string)) {
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 
@@ -183,7 +197,7 @@ func ListenChannelPoints(cID string, f *os.File, callback func(string, *os.File)
 				message := &twitchMessage{}
 				json.Unmarshal([]byte(resp.Data.Message), message)
 				if message.Type == "reward-redeemed" {
-					callback(message.Data.Redemption.Reward.Title, f)
+					callback(message.Data.Redemption.Reward.Title)
 				}
 			}
 		}

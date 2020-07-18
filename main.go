@@ -27,6 +27,8 @@ var t *twitch.Client
 var playing bool
 var channelID string
 
+var lastSpeech time.Time = time.Unix(0, 0)
+
 func init() {
 	err := twedia.GetSongs(&artists)
 	if err != nil {
@@ -52,23 +54,47 @@ Commands:
 	quit  : exit program`)
 }
 
-func play(artist twedia.Artist, album twedia.Album, song twedia.Song, f *os.File) error {
+func play(artist twedia.Artist, album twedia.Album, song twedia.Song) error {
+	var f *os.File
+	var err error
+	for {
+		f, err = os.Create(os.Getenv("TWITCH_MUSIC_FILE"))
+		if err == nil {
+			break
+		}
+	}
+	defer f.Close()
+
 	// open the song for playing
 	s := string(os.PathSeparator)
-	mf, err := os.Open(os.Getenv("TWITCH_MUSIC_DIR") + s + artist.Artist + s + album.Name + s + song.Title + ".mp3")
+
+	f.WriteString(fmt.Sprintf("\n%s, by %s", song.Title, artist.Artist))
+	t.Say(os.Getenv("TWITCH_CHANNEL_NAME"), fmt.Sprintf("Playing %s by %s. Listen on YouTube: %s", song.Title, artist.Artist, song.URL))
+
+	err = playFile(os.Getenv("TWITCH_MUSIC_DIR") + s + artist.Artist + s + album.Name + s + song.Title + ".mp3")
+
+	// clear the current song from the now playing file list
+	// (this implementation will double line count but is otherwise
+	// reasonably cheap from a storage perspective)
+	os.Create(os.Getenv("TWITCH_MUSIC_FILE"))
+
+	return nil
+}
+
+func playFile(fn string) error {
+	var format beep.Format
+	var err error
+
+	mf, err := os.Open(fn)
 	if err != nil {
 		return err
 	}
 
-	var format beep.Format
 	streamer, format, err = mp3.Decode(mf)
 	if err != nil {
 		return err
 	}
 	defer streamer.Close()
-
-	f.WriteString(fmt.Sprintf("\n%s, by %s", song.Title, artist.Artist))
-	t.Say(os.Getenv("TWITCH_CHANNEL_NAME"), fmt.Sprintf("Playing %s by %s. Listen on YouTube: %s", song.Title, artist.Artist, song.URL))
 
 	resampled := beep.Resample(4, format.SampleRate, sampleRate, streamer)
 
@@ -79,15 +105,10 @@ func play(artist twedia.Artist, album twedia.Album, song twedia.Song, f *os.File
 
 	<-done
 
-	// clear the current song from the now playing file list
-	// (this implementation will double line count but is otherwise
-	// reasonably cheap from a storage perspective)
-	f.WriteString("\n")
-
 	return nil
 }
 
-func playRnd(f *os.File) {
+func playRnd() {
 	for playing {
 		// select a random artist, with probability adjusted proportionally to the number of songs by that artist (this finally solves the disproportionate frequency of 'The Tea Song' and 'Blessed Are The Teamakers')
 		var artist twedia.Artist
@@ -106,7 +127,7 @@ func playRnd(f *os.File) {
 		// and a random song from that album
 		song := album.Songs[rand.Intn(len(album.Songs))]
 
-		err := play(artist, album, song, f)
+		err := play(artist, album, song)
 		if err != nil {
 			log.Println(err)
 			continue
@@ -114,16 +135,22 @@ func playRnd(f *os.File) {
 	}
 }
 
+func stopPlayback() {
+	streamer.Close()
+	playing = false
+	os.Create(os.Getenv("TWITCH_MUSIC_FILE"))
+}
+
 // TODO: eventually find a method by which to generalise this function.
 // ideally, we want some kind of text-file interface by which to define songs
 // to play / actions to fulfil based on the reward data...
-func rewardCallback(rName string, f *os.File) {
+func rewardCallback(rName string) {
 	if strings.ToLower(rName) == "play the tea song" {
 		var artist twedia.Artist
 		var album twedia.Album
 		var song twedia.Song
 		for _, ar := range artists.Artists {
-			if ar.Artist != "Miscellaneous" {
+			if ar.Artist != "Yorkshire Tea" {
 				continue
 			}
 			artist = ar
@@ -145,21 +172,37 @@ func rewardCallback(rName string, f *os.File) {
 			streamer.Close()
 		}
 		playing = true
-		go play(artist, album, song, f)
+		go play(artist, album, song)
 	}
 }
 
 func main() {
 	r := make(chan bool)
 
-	f, err := os.Create(os.Getenv("TWITCH_MUSIC_FILE"))
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer f.Close()
-
 	// Set up Twitch bot
 	t = twitch.NewClient(os.Getenv("TWITCH_BOT_USERNAME"), "oauth:"+os.Getenv("TWITCH_OAUTH_TOKEN"))
+
+	t.OnPrivateMessage(func(m twitch.PrivateMessage) {
+		if strings.ToLower(strings.Split(m.Message, " ")[0]) == "!joe" && time.Now().Sub(lastSpeech) > (5*time.Minute) {
+			wasPlaying := playing
+
+			// write spoken speech to file
+			fn := twedia.SynthesiseText("Remember Damo, Joe is the most rational human on planet Earth, and would never actively be disruptive!")
+
+			stopPlayback()
+
+			err := playFile(fn)
+			if err != nil {
+				log.Println("Error playing synthesised speech:", err)
+			}
+			lastSpeech = time.Now()
+
+			if wasPlaying {
+				playRnd()
+			}
+		}
+	})
+
 	t.Join(os.Getenv("TWITCH_CHANNEL_NAME"))
 
 	t.OnConnect(func() {
@@ -176,12 +219,13 @@ func main() {
 
 	<-r
 
-	go twedia.ListenChannelPoints(channelID, f, rewardCallback)
+	go twedia.ListenChannelPoints(channelID, rewardCallback)
 
 	for {
 		fmt.Print("> ")
 
 		var opt string
+		var err error
 		for {
 			reader := bufio.NewReader(os.Stdin)
 			opt, err = reader.ReadString('\n')
@@ -192,21 +236,19 @@ func main() {
 		opt = strings.ToLower(strings.Replace(strings.Replace(opt, "\n", "", -1), "\r", "", -1))
 		if opt == "start" {
 			playing = true
-			go playRnd(f)
+			go playRnd()
 		} else if opt == "skip" {
 			streamer.Close()
 		} else if opt == "stop" {
-			streamer.Close()
-			playing = false
+			stopPlayback()
 		} else if opt == "select" {
 			artist, album, song := twedia.SelectSong(&artists)
 			playing = true
-			go play(*artist, *album, *song, f)
+			go play(*artist, *album, *song)
 		} else if opt == "quit" {
 			break
 		}
 	}
 
-	// clear the contents of the Now Playing file
-	os.Create(os.Getenv("TWITCH_MUSIC_FILE"))
+	stopPlayback()
 }
