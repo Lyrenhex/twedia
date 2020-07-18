@@ -68,7 +68,7 @@ type TwitchRedemption struct {
 }
 type twitchMsgData struct {
 	Timestamp  time.Time        `json:"timestamp"`
-	Redemption twitchRedemption `json:"redemption"`
+	Redemption TwitchRedemption `json:"redemption"`
 }
 type twitchMessage struct {
 	Type string        `json:"type"`
