@@ -9,6 +9,8 @@ import (
 	texttospeechpb "google.golang.org/genproto/googleapis/cloud/texttospeech/v1"
 )
 
+// SynthesiseText uses the Google Cloud Text-to-Speech API to generate an MP3 audio file speaking the provided string t, and returns the file name of the created MP3 file.
+// NB. this function requires that a valid Google API credential file is present and referred to by the 'GOOGLE_APPLICATION_CREDENTIALS' environment variable.
 func SynthesiseText(t string) string {
 	// Instantiates a client.
 	ctx := context.Background()
