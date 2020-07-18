@@ -55,7 +55,9 @@ type twitchReward struct {
 	MaxPerStream                      twitchRewardMax `json:"max_per_stream"`
 	ShouldRedemptionsSkipRequestQueue bool            `json:"should_redemptions_skip_request_queue"`
 }
-type twitchRedemption struct {
+
+// TwitchRedemption represents a Channel Point reward redemption on Twitch.
+type TwitchRedemption struct {
 	ID         string       `json:"id"`
 	User       twitchUser   `json:"user"`
 	ChannelID  string       `json:"channel_id"`
@@ -148,7 +150,7 @@ func GetChannelID(token string) string {
 }
 
 // ListenChannelPoints starts a WebSocket listening to the Twitch PubSub API for Channel Point redemptions, which calls callback with the provided file handle and the reward title as a string
-func ListenChannelPoints(cID string, callback func(string)) {
+func ListenChannelPoints(cID string, callback func(TwitchRedemption)) {
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 
@@ -218,7 +220,7 @@ func ListenChannelPoints(cID string, callback func(string)) {
 				message := &twitchMessage{}
 				json.Unmarshal([]byte(resp.Data.Message), message)
 				if message.Type == "reward-redeemed" {
-					callback(message.Data.Redemption.Reward.Title)
+					callback(message.Data.Redemption)
 				}
 			}
 		}

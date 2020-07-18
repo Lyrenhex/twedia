@@ -144,8 +144,8 @@ func stopPlayback() {
 // TODO: eventually find a method by which to generalise this function.
 // ideally, we want some kind of text-file interface by which to define songs
 // to play / actions to fulfil based on the reward data...
-func rewardCallback(rName string) {
-	if strings.ToLower(rName) == "play the tea song" {
+func rewardCallback(r twedia.TwitchRedemption) {
+	if strings.ToLower(r.Reward.Title) == "play the tea song" {
 		var artist twedia.Artist
 		var album twedia.Album
 		var song twedia.Song
