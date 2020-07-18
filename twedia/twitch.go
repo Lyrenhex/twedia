@@ -24,13 +24,48 @@ const twitchPubSubAPI string = "wss://pubsub-edge.twitch.tv"
 type twitchAPI5Resp struct {
 	ID string `json:"_id"`
 }
+type twitchUser struct {
+	ID          string `json:"id"`
+	Login       string `json:"login"`
+	DisplayName string `json:"display_name"`
+}
+type twitchRewardImg struct {
+	URL1x string `json:"url_1x"`
+	URL2x string `json:"url_2x"`
+	URL4x string `json:"url_4x"`
+}
+type twitchRewardMax struct {
+	IsEnabled    bool `json:"is_enabled"`
+	MaxPerStream int  `json:"max_per_stream"`
+}
 type twitchReward struct {
-	Title string `json:"title"`
+	ID                                string          `json:"id"`
+	ChannelID                         string          `json:"channel_id"`
+	Title                             string          `json:"title"`
+	Prompt                            string          `json:"prompt"`
+	Cost                              int             `json:"cost"`
+	IsUserInputRequired               bool            `json:"is_user_input_required"`
+	IsSubOnly                         bool            `json:"is_sub_only"`
+	Image                             twitchRewardImg `json:"image"`
+	DefaultImage                      twitchRewardImg `json:"default_image"`
+	BackgroundColor                   string          `json:"background_color"`
+	IsEnabled                         bool            `json:"is_enabled"`
+	IsPaused                          bool            `json:"is_paused"`
+	IsInStock                         bool            `json:"is_in_stock"`
+	MaxPerStream                      twitchRewardMax `json:"max_per_stream"`
+	ShouldRedemptionsSkipRequestQueue bool            `json:"should_redemptions_skip_request_queue"`
 }
 type twitchRedemption struct {
-	Reward twitchReward `json:"reward"`
+	ID         string       `json:"id"`
+	User       twitchUser   `json:"user"`
+	ChannelID  string       `json:"channel_id"`
+	RedeemedAt time.Time    `json:"redeemed_at"`
+	Reward     twitchReward `json:"reward"`
+	UserInput  string       `json:"user_input"`
+	Status     string       `json:"status"`
 }
 type twitchMsgData struct {
+	Timestamp  time.Time        `json:"timestamp"`
 	Redemption twitchRedemption `json:"redemption"`
 }
 type twitchMessage struct {
@@ -50,6 +85,8 @@ type twitchPubSub struct {
 	Error string     `json:"error"`
 }
 
+// GetOAuthToken gets a User OAuth Token from the Twitch API v5 and returns it as a string.
+// This function needs further work: it is not fully automated, requiring user involvement (which also has an ugly UX)
 func GetOAuthToken() string {
 	token, set := os.LookupEnv("TWITCH_PUBSUB_OAUTH_TOKEN")
 	if set {
@@ -111,7 +148,7 @@ func GetChannelID(token string) string {
 }
 
 // ListenChannelPoints starts a WebSocket listening to the Twitch PubSub API for Channel Point redemptions, which calls callback with the provided file handle and the reward title as a string
-func ListenChannelPoints(cID string, f *os.File, callback func(string, *os.File)) {
+func ListenChannelPoints(cID string, callback func(string)) {
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 
@@ -181,7 +218,7 @@ func ListenChannelPoints(cID string, f *os.File, callback func(string, *os.File)
 				message := &twitchMessage{}
 				json.Unmarshal([]byte(resp.Data.Message), message)
 				if message.Type == "reward-redeemed" {
-					callback(message.Data.Redemption.Reward.Title, f)
+					callback(message.Data.Redemption.Reward.Title)
 				}
 			}
 		}
