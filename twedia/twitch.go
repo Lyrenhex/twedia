@@ -90,11 +90,6 @@ type twitchPubSub struct {
 // GetOAuthToken gets a User OAuth Token from the Twitch API v5 and returns it as a string.
 // This function needs further work: it is not fully automated, requiring user involvement (which also has an ugly UX)
 func GetOAuthToken() string {
-	token, set := os.LookupEnv("TWITCH_PUBSUB_OAUTH_TOKEN")
-	if set {
-		return token
-	}
-
 	browser.OpenURL("https://id.twitch.tv/oauth2/authorize?client_id=" + os.Getenv("TWITCH_CLIENT_ID") + "&redirect_uri=http://localhost&response_type=token&scope=channel_read%20channel:read:redemptions")
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -111,6 +106,7 @@ func GetOAuthToken() string {
 
 	fmt.Print("Please enter OAuth token: ")
 
+	var token string
 	var err error
 	for {
 		reader := bufio.NewReader(os.Stdin)
