@@ -21,8 +21,8 @@ import (
 
 const twitchPubSubAPI string = "wss://pubsub-edge.twitch.tv"
 
-type twitchAPI5Resp struct {
-	ID string `json:"_id"`
+type twitchAPIResp struct {
+	Users []twitchUser `json:"data"`
 }
 type twitchUser struct {
 	ID          string `json:"id"`
@@ -87,7 +87,7 @@ type twitchPubSub struct {
 	Error string     `json:"error"`
 }
 
-// GetOAuthToken gets a User OAuth Token from the Twitch API v5 and returns it as a string.
+// GetOAuthToken gets a User OAuth Token from the Twitch API and returns it as a string.
 // This function needs further work: it is not fully automated, requiring user involvement (which also has an ugly UX)
 func GetOAuthToken() string {
 	browser.OpenURL("https://id.twitch.tv/oauth2/authorize?client_id=" + os.Getenv("TWITCH_CLIENT_ID") + "&redirect_uri=http://localhost&response_type=token&scope=channel_read%20channel:read:redemptions")
@@ -124,13 +124,12 @@ func GetOAuthToken() string {
 
 // GetChannelID retrieves the channel ID for the OAuth token provided, and returns it as a string
 func GetChannelID(token string) string {
-	chanInfo := &twitchAPI5Resp{}
+	chanInfo := &twitchAPIResp{}
 
 	client := &http.Client{}
-	req, _ := http.NewRequest("GET", "https://api.twitch.tv/kraken/channel", nil)
-	req.Header.Add("Accept", "application/vnd.twitchtv.v5+json")
-	req.Header.Add("Authorization", "OAuth "+token)
-	req.Header.Add("Client-ID", os.Getenv("TWITCH_CLIENT_ID"))
+	req, _ := http.NewRequest("GET", "https://api.twitch.tv/helix/users", nil)
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("Client-Id", os.Getenv("TWITCH_CLIENT_ID"))
 	resp, err := client.Do(req)
 	if err != nil {
 		panic(err)
@@ -142,7 +141,7 @@ func GetChannelID(token string) string {
 	}
 	json.Unmarshal(body, chanInfo)
 
-	return chanInfo.ID
+	return chanInfo.Users[0].ID
 }
 
 // ListenChannelPoints starts a WebSocket listening to the Twitch PubSub API for Channel Point redemptions, which calls callback with the provided file handle and the reward title as a string
@@ -208,7 +207,11 @@ func ListenChannelPoints(cID string, callback func(TwitchRedemption)) {
 			switch resp.Type {
 			case "RESPONSE":
 				if resp.Error == "ERR_BADAUTH" {
+					log.Println("Bad PubSub auth, requesting new token.")
 					GetOAuthToken()
+					// this attempt was a failure; interrupt the keepalive and try again
+					interrupt <- os.Interrupt
+					go ListenChannelPoints(cID, callback)
 				} else if resp.Error != "" {
 					log.Println("PubSub API error: ", resp.Error)
 				}

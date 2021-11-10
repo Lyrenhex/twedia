@@ -38,7 +38,10 @@ func init() {
 	// initialise the speaker to the sampleRate defined in constants
 	speaker.Init(sampleRate, sampleRate.N(bufferSize))
 
-	token := twedia.GetOAuthToken()
+	token, set := os.LookupEnv("TWITCH_PUBSUB_OAUTH_TOKEN")
+	if !set {
+		token = twedia.GetOAuthToken()
+	}
 	channelID = twedia.GetChannelID(token)
 
 	// Seed the random Source such that we don't always listen to Blessed are the Teamakers...
@@ -182,8 +185,8 @@ func main() {
 	// Set up Twitch bot
 	t = twitch.NewClient(os.Getenv("TWITCH_BOT_USERNAME"), "oauth:"+os.Getenv("TWITCH_OAUTH_TOKEN"))
 
-	t.OnPrivateMessage(func(m twitch.PrivateMessage) {
-		if strings.ToLower(strings.Split(m.Message, " ")[0]) == "!joe" && time.Now().Sub(lastSpeech) > (5*time.Minute) {
+	t.OnNewMessage(func(c string, u twitch.User, m twitch.Message) {
+		if strings.ToLower(strings.Split(m.Text, " ")[0]) == "!joe" && time.Since(lastSpeech) > (5*time.Minute) {
 			wasPlaying := playing
 
 			// write spoken speech to file
