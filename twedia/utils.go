@@ -37,11 +37,11 @@ type Music struct {
 }
 
 // GetSongs populates the provided Music object with the song database found at the URL specified in the TWITCH_SONG_LINK_DATABASE_URL environment variable
-func GetSongs(a *Music) error {
+func GetSongs(a *Music, songsCollectionURL string) error {
 	c := http.Client{
 		Timeout: time.Second * 5,
 	}
-	req, err := http.NewRequest(http.MethodGet, os.Getenv("TWITCH_SONG_LINK_DATABASE_URL"), nil)
+	req, err := http.NewRequest(http.MethodGet, songsCollectionURL, nil)
 	if err != nil {
 		return err
 	}

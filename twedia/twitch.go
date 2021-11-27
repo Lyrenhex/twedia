@@ -89,8 +89,8 @@ type twitchPubSub struct {
 
 // GetOAuthToken gets a User OAuth Token from the Twitch API and returns it as a string.
 // This function needs further work: it is not fully automated, requiring user involvement (which also has an ugly UX)
-func GetOAuthToken() string {
-	browser.OpenURL("https://id.twitch.tv/oauth2/authorize?client_id=" + os.Getenv("TWITCH_CLIENT_ID") + "&redirect_uri=http://localhost&response_type=token&scope=channel_read%20channel:read:redemptions")
+func GetOAuthToken(clientID string) string {
+	browser.OpenURL("https://id.twitch.tv/oauth2/authorize?client_id=" + clientID + "&redirect_uri=http://localhost&response_type=token&scope=channel_read%20channel:read:redemptions")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -117,19 +117,17 @@ func GetOAuthToken() string {
 	}
 	token = strings.Replace(strings.Replace(token, "\n", "", -1), "\r", "", -1)
 
-	os.Setenv("TWITCH_PUBSUB_OAUTH_TOKEN", token)
-
 	return token
 }
 
 // GetChannelID retrieves the channel ID for the OAuth token provided, and returns it as a string
-func GetChannelID(token string) string {
+func GetChannelID(token, clientID string) string {
 	chanInfo := &twitchAPIResp{}
 
 	client := &http.Client{}
 	req, _ := http.NewRequest("GET", "https://api.twitch.tv/helix/users", nil)
 	req.Header.Add("Authorization", "Bearer "+token)
-	req.Header.Add("Client-Id", os.Getenv("TWITCH_CLIENT_ID"))
+	req.Header.Add("Client-Id", clientID)
 	resp, err := client.Do(req)
 	if err != nil {
 		panic(err)
@@ -145,7 +143,7 @@ func GetChannelID(token string) string {
 }
 
 // ListenChannelPoints starts a WebSocket listening to the Twitch PubSub API for Channel Point redemptions, which calls callback with the provided file handle and the reward title as a string
-func ListenChannelPoints(cID string, callback func(TwitchRedemption)) {
+func ListenChannelPoints(chanID, clientID string, callback func(TwitchRedemption)) {
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 
@@ -163,7 +161,7 @@ func ListenChannelPoints(cID string, callback func(TwitchRedemption)) {
 			Type: "LISTEN",
 			Data: twitchData{
 				Topics: []string{
-					"channel-points-channel-v1." + cID,
+					"channel-points-channel-v1." + chanID,
 				},
 				AuthToken: os.Getenv("TWITCH_PUBSUB_OAUTH_TOKEN"),
 			},
@@ -188,9 +186,7 @@ func ListenChannelPoints(cID string, callback func(TwitchRedemption)) {
 						log.Println("PubSub write close: ", err)
 						return
 					}
-					select {
-					case <-time.After(time.Second):
-					}
+					time.Sleep(time.Second)
 					return
 				}
 			}
@@ -208,10 +204,10 @@ func ListenChannelPoints(cID string, callback func(TwitchRedemption)) {
 			case "RESPONSE":
 				if resp.Error == "ERR_BADAUTH" {
 					log.Println("Bad PubSub auth, requesting new token.")
-					GetOAuthToken()
+					GetOAuthToken(clientID)
 					// this attempt was a failure; interrupt the keepalive and try again
 					interrupt <- os.Interrupt
-					go ListenChannelPoints(cID, callback)
+					go ListenChannelPoints(chanID, clientID, callback)
 				} else if resp.Error != "" {
 					log.Println("PubSub API error: ", resp.Error)
 				}

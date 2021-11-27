@@ -2,7 +2,9 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"math/rand"
 	"os"
@@ -21,6 +23,39 @@ const (
 	bufferSize time.Duration   = time.Second / 10
 )
 
+type Config struct {
+	Username           string    `json:"username"`
+	Channel            string    `json:"channel"`
+	ClientID           string    `json:"clientID"`
+	ClientSecret       string    `json:"clientSecret"`
+	MusicDir           string    `json:"musicDir"`
+	MusicFile          string    `json:"musicFile"`
+	OauthToken         string    `json:"oauthToken"`
+	PubsubOauthToken   string    `json:"pubsubOauthToken"`
+	MusicCollectionURL string    `json:"musicCollectionURL"`
+	ChatCommands       []command `json:"chatCommands"`
+	PointRewards       []reward  `json:"pointRewards"`
+}
+
+type command struct {
+	Trigger string `json:"trigger"`
+	Action  action `json:"action"`
+}
+
+type reward struct {
+	Title  string `json:"rewardTitle"`
+	Action action `json:"action"`
+}
+
+type action struct {
+	Type   string `json:"type"`
+	Text   string `json:"text"`
+	Artist string `json:"artist"`
+	Album  string `json:"album"`
+	Song   string `json:"title"`
+}
+
+var config Config
 var artists twedia.Music
 var streamer beep.StreamSeekCloser
 var t *twitch.Client
@@ -30,7 +65,13 @@ var channelID string
 var lastSpeech time.Time = time.Unix(0, 0)
 
 func init() {
-	err := twedia.GetSongs(&artists)
+	var err error
+	config, err = loadConfig(os.Getenv("TWITCH_CONFIG_FILE"))
+	if err != nil {
+		panic(err)
+	}
+
+	err = twedia.GetSongs(&artists, config.MusicCollectionURL)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -38,11 +79,7 @@ func init() {
 	// initialise the speaker to the sampleRate defined in constants
 	speaker.Init(sampleRate, sampleRate.N(bufferSize))
 
-	token, set := os.LookupEnv("TWITCH_PUBSUB_OAUTH_TOKEN")
-	if !set {
-		token = twedia.GetOAuthToken()
-	}
-	channelID = twedia.GetChannelID(token)
+	channelID = twedia.GetChannelID(config.PubsubOauthToken, config.ClientID)
 
 	// Seed the random Source such that we don't always listen to Blessed are the Teamakers...
 	rand.Seed(time.Now().UnixNano())
@@ -57,11 +94,27 @@ Commands:
 	quit  : exit program`)
 }
 
+func loadConfig(s string) (Config, error) {
+	var config Config
+
+	f, err := os.Open(s)
+	if err != nil {
+		return config, err
+	}
+	defer f.Close()
+
+	b, _ := ioutil.ReadAll(f)
+
+	json.Unmarshal(b, &config)
+
+	return config, nil
+}
+
 func play(artist twedia.Artist, album twedia.Album, song twedia.Song) error {
 	var f *os.File
 	var err error
 	for {
-		f, err = os.Create(os.Getenv("TWITCH_MUSIC_FILE"))
+		f, err = os.Create(config.MusicFile)
 		if err == nil {
 			break
 		}
@@ -72,14 +125,12 @@ func play(artist twedia.Artist, album twedia.Album, song twedia.Song) error {
 	s := string(os.PathSeparator)
 
 	f.WriteString(fmt.Sprintf("\n%s, by %s", song.Title, artist.Artist))
-	t.Say(os.Getenv("TWITCH_CHANNEL_NAME"), fmt.Sprintf("Playing %s by %s. Listen on YouTube: %s", song.Title, artist.Artist, song.URL))
+	t.Say(config.Channel, fmt.Sprintf("Playing %s by %s. Listen on YouTube: %s", song.Title, artist.Artist, song.URL))
 
-	err = playFile(os.Getenv("TWITCH_MUSIC_DIR") + s + artist.Artist + s + album.Name + s + song.Title + ".mp3")
+	playFile(config.MusicDir + s + artist.Artist + s + album.Name + s + song.Title + ".mp3")
 
 	// clear the current song from the now playing file list
-	// (this implementation will double line count but is otherwise
-	// reasonably cheap from a storage perspective)
-	os.Create(os.Getenv("TWITCH_MUSIC_FILE"))
+	os.Create(config.MusicFile)
 
 	return nil
 }
@@ -141,29 +192,36 @@ func playRnd() {
 func stopPlayback() {
 	streamer.Close()
 	playing = false
-	os.Create(os.Getenv("TWITCH_MUSIC_FILE"))
+	os.Create(config.MusicFile)
 }
 
-// TODO: eventually find a method by which to generalise this function.
-// ideally, we want some kind of text-file interface by which to define songs
-// to play / actions to fulfil based on the reward data...
 func rewardCallback(r twedia.TwitchRedemption) {
-	if strings.ToLower(r.Reward.Title) == "play the tea song" {
+	for _, rewardAction := range config.PointRewards {
+		if strings.EqualFold(r.Reward.Title, rewardAction.Title) {
+			continue
+		}
+		completeAction(rewardAction.Action)
+	}
+}
+
+func completeAction(a action) {
+	switch a.Type {
+	case "song":
 		var artist twedia.Artist
 		var album twedia.Album
 		var song twedia.Song
 		for _, ar := range artists.Artists {
-			if ar.Artist != "Yorkshire Tea" {
+			if strings.EqualFold(ar.Artist, a.Artist) {
 				continue
 			}
 			artist = ar
 			for _, al := range ar.Albums {
-				if al.Name != "Yorkshire Tea" {
+				if strings.EqualFold(al.Name, a.Album) {
 					continue
 				}
 				album = al
 				for _, s := range al.Songs {
-					if s.Title != "The Tea Song" {
+					if strings.EqualFold(s.Title, a.Song) {
 						continue
 					}
 					song = s
@@ -174,8 +232,25 @@ func rewardCallback(r twedia.TwitchRedemption) {
 		if streamer != nil {
 			streamer.Close()
 		}
-		playing = true
+		playing = false
 		go play(artist, album, song)
+	case "tts":
+		wasPlaying := playing
+
+		// write spoken speech to file
+		fn := twedia.SynthesiseText(a.Text)
+
+		stopPlayback()
+
+		err := playFile(fn)
+		if err != nil {
+			log.Println("Error playing synthesised speech:", err)
+		}
+		lastSpeech = time.Now()
+
+		if wasPlaying {
+			playRnd()
+		}
 	}
 }
 
@@ -183,30 +258,20 @@ func main() {
 	r := make(chan bool)
 
 	// Set up Twitch bot
-	t = twitch.NewClient(os.Getenv("TWITCH_BOT_USERNAME"), "oauth:"+os.Getenv("TWITCH_OAUTH_TOKEN"))
+	t = twitch.NewClient(config.Username, "oauth:"+config.OauthToken)
 
 	t.OnNewMessage(func(c string, u twitch.User, m twitch.Message) {
-		if strings.ToLower(strings.Split(m.Text, " ")[0]) == "!joe" && time.Since(lastSpeech) > (5*time.Minute) {
-			wasPlaying := playing
-
-			// write spoken speech to file
-			fn := twedia.SynthesiseText("Remember Damo, Joe is the most rational human on planet Earth, and would never actively be disruptive!")
-
-			stopPlayback()
-
-			err := playFile(fn)
-			if err != nil {
-				log.Println("Error playing synthesised speech:", err)
-			}
-			lastSpeech = time.Now()
-
-			if wasPlaying {
-				playRnd()
+		if time.Since(lastSpeech) > (5 * time.Minute) {
+			for _, chatCommand := range config.ChatCommands {
+				if strings.EqualFold(strings.Split(m.Text, " ")[0], chatCommand.Trigger) {
+					continue
+				}
+				completeAction(chatCommand.Action)
 			}
 		}
 	})
 
-	t.Join(os.Getenv("TWITCH_CHANNEL_NAME"))
+	t.Join(config.Channel)
 
 	t.OnConnect(func() {
 		log.Println("Connected to Twitch chat")
@@ -222,7 +287,7 @@ func main() {
 
 	<-r
 
-	go twedia.ListenChannelPoints(channelID, rewardCallback)
+	go twedia.ListenChannelPoints(channelID, config.ClientID, rewardCallback)
 
 	for {
 		fmt.Print("> ")

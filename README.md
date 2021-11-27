@@ -3,15 +3,49 @@ TODO: description
 
 ## Environment Variables
 
-- `TWITCH_BOT_USERNAME` = Twitch account username of the bot
-- `TWITCH_CHANNEL_NAME` = Twitch channel name of the streamer
-- `TWITCH_MUSIC_DIR` = Path to the directory storing Twitch-friendly songs
-- `TWITCH_MUSIC_FILE` = Path to the file to write the current song to (for OBS to read from)
-- `TWITCH_OAUTH_TOKEN` = OAuth token for the bot's Twitch account
-- `TWITCH_SONG_LINK_DATABASE_URL` = URL to the JSON-formatted list of songs and their appropriate YouTube URL
-- `TWITCH_CLIENT_ID` = Client ID of the Twedia application supplied by [dev.twitch.tv](https://dev.twitch.tv)
-  - The application should have an OAuth redirect of `http://localhost`
-- `TWITCH_CLIENT_SECRET` = Client Secret for the application with ID specified in `TWITCH_CLIENT_ID`
-- `TWITCH_PUBSUB_OAUTH_TOKEN` = (User) OAuth token used for Twitch API v5 and PubSub API requests
+- `TWITCH_CONFIG_FILE` = Absolute path to the configuration file for the bot (json, see below).
 
-(This project has expanded to a good few environment variables -- plans to refactor to use fewer and instead store things in a file are underway)
+## Config file
+
+Subsequent configuration is handled by the config file, which should be structured similarly so:
+
+```json
+{
+    "username": "botlyren",
+    "channel": "Lyrenhex",
+    "clientID": "client ID from the Twitch developer site",
+    "clientSecret": "client Secret from the Twitch developer site",
+    "musicDir": "Absolute path to the folder containing the music (Artist -> Album -> Song.mp3)",
+    "musicFile": "Absolute path to the file read by OBS for on-screen music credit.",
+    "oauthToken": "OAuth Token for the bot's IRC connection to chat.",
+    "pubsubOauthToken": "OAuth Token for the bot's PubSub connection (different to above -- this is generated using the web auth flow on first run, and then can be populated here before restarting the bot)",
+    "musicCollectionURL": "https://lyrenhex.com/stream-content/music.json (replace with your own :))",
+    "chatCommands": [
+        {
+            "trigger": "!example",
+            "action": {
+                "type": "tts",
+                "text": "Something for the TTS system to speak! (NB. this uses Google Cloud; please see their docs for the Go library to set this up)"
+            }
+        }
+    ],
+    "pointRewards": [
+        {
+            "rewardTitle": "Play (Specific Song)",
+            "action": {
+                "type": "song",
+                "artist": "Artist name",
+                "album": "Album name",
+                "title": "Song name"
+            }
+        },
+        {
+            "rewardTitle": "TTS Reward",
+            "action": {
+                "type": "tts",
+                "text": "This also supports TTS! See above..."
+            }
+        }
+    ]
+}
+```
