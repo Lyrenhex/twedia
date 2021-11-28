@@ -143,7 +143,7 @@ func GetChannelID(token, clientID string) string {
 }
 
 // ListenChannelPoints starts a WebSocket listening to the Twitch PubSub API for Channel Point redemptions, which calls callback with the provided file handle and the reward title as a string
-func ListenChannelPoints(chanID, clientID string, callback func(TwitchRedemption)) {
+func ListenChannelPoints(chanID, clientID, oauthToken string, callback func(TwitchRedemption)) {
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 
@@ -163,7 +163,7 @@ func ListenChannelPoints(chanID, clientID string, callback func(TwitchRedemption
 				Topics: []string{
 					"channel-points-channel-v1." + chanID,
 				},
-				AuthToken: os.Getenv("TWITCH_PUBSUB_OAUTH_TOKEN"),
+				AuthToken: oauthToken,
 			},
 		}
 		listenReqJSON, _ := json.Marshal(listenReq)
@@ -207,7 +207,7 @@ func ListenChannelPoints(chanID, clientID string, callback func(TwitchRedemption
 					GetOAuthToken(clientID)
 					// this attempt was a failure; interrupt the keepalive and try again
 					interrupt <- os.Interrupt
-					go ListenChannelPoints(chanID, clientID, callback)
+					go ListenChannelPoints(chanID, clientID, oauthToken, callback)
 				} else if resp.Error != "" {
 					log.Println("PubSub API error: ", resp.Error)
 				}

@@ -287,7 +287,7 @@ func main() {
 
 	<-r
 
-	go twedia.ListenChannelPoints(channelID, config.ClientID, rewardCallback)
+	go twedia.ListenChannelPoints(channelID, config.ClientID, config.PubsubOauthToken, rewardCallback)
 
 	for {
 		fmt.Print("> ")
