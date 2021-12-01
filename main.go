@@ -319,4 +319,5 @@ func main() {
 	}
 
 	stopPlayback()
+	os.Exit(0)
 }
