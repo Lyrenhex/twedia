@@ -198,9 +198,9 @@ func stopPlayback() {
 func rewardCallback(r twedia.TwitchRedemption) {
 	for _, rewardAction := range config.PointRewards {
 		if strings.EqualFold(r.Reward.Title, rewardAction.Title) {
-			continue
+			completeAction(rewardAction.Action)
+			return
 		}
-		completeAction(rewardAction.Action)
 	}
 }
 
@@ -212,20 +212,20 @@ func completeAction(a action) {
 		var song twedia.Song
 		for _, ar := range artists.Artists {
 			if strings.EqualFold(ar.Artist, a.Artist) {
-				continue
-			}
-			artist = ar
-			for _, al := range ar.Albums {
-				if strings.EqualFold(al.Name, a.Album) {
-					continue
-				}
-				album = al
-				for _, s := range al.Songs {
-					if strings.EqualFold(s.Title, a.Song) {
-						continue
+				artist = ar
+				for _, al := range ar.Albums {
+					if strings.EqualFold(al.Name, a.Album) {
+						album = al
+						for _, s := range al.Songs {
+							if strings.EqualFold(s.Title, a.Song) {
+								song = s
+								break
+							}
+						}
+						break
 					}
-					song = s
 				}
+				break
 			}
 		}
 
@@ -264,9 +264,9 @@ func main() {
 		if time.Since(lastSpeech) > (5 * time.Minute) {
 			for _, chatCommand := range config.ChatCommands {
 				if strings.EqualFold(strings.Split(m.Text, " ")[0], chatCommand.Trigger) {
-					continue
+					completeAction(chatCommand.Action)
+					return
 				}
-				completeAction(chatCommand.Action)
 			}
 		}
 	})
