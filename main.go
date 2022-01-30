@@ -11,16 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/faiface/beep"
-	"github.com/faiface/beep/mp3"
-	"github.com/faiface/beep/speaker"
 	"github.com/gempir/go-twitch-irc"
 	"github.com/lyrenhex/twedia/twedia"
-)
-
-const (
-	sampleRate beep.SampleRate = 48000
-	bufferSize time.Duration   = time.Second / 10
 )
 
 type Config struct {
@@ -57,10 +49,10 @@ type action struct {
 
 var config Config
 var artists twedia.Music
-var streamer beep.StreamSeekCloser
 var t *twitch.Client
-var playing bool
 var channelID string
+var musicPlayer twedia.Player
+var speechPlayer twedia.Player
 
 var lastSpeech time.Time = time.Unix(0, 0)
 
@@ -76,8 +68,13 @@ func init() {
 		log.Fatal(err)
 	}
 
-	// initialise the speaker to the sampleRate defined in constants
-	speaker.Init(sampleRate, sampleRate.N(bufferSize))
+	err = twedia.InitSpeaker()
+	if err != nil {
+		fmt.Println("Error initialising speaker:", err)
+	}
+
+	musicPlayer = twedia.NewPlayer()
+	speechPlayer = twedia.NewPlayer()
 
 	for {
 		channelID, err = twedia.GetChannelID(config.PubsubOauthToken, config.ClientID)
@@ -158,7 +155,7 @@ func play(artist twedia.Artist, album twedia.Album, song twedia.Song) error {
 	f.WriteString(fmt.Sprintf("\n%s, by %s", song.Title, artist.Artist))
 	t.Say(config.Channel, fmt.Sprintf("Playing %s by %s. Listen on YouTube: %s", song.Title, artist.Artist, song.URL))
 
-	playFile(config.MusicDir + s + artist.Artist + s + album.Name + s + song.Title + ".mp3")
+	musicPlayer.PlayFile(config.MusicDir + s + artist.Artist + s + album.Name + s + song.Title + ".mp3")
 
 	// clear the current song from the now playing file list
 	os.Create(config.MusicFile)
@@ -166,35 +163,8 @@ func play(artist twedia.Artist, album twedia.Album, song twedia.Song) error {
 	return nil
 }
 
-func playFile(fn string) error {
-	var format beep.Format
-	var err error
-
-	mf, err := os.Open(fn)
-	if err != nil {
-		return err
-	}
-
-	streamer, format, err = mp3.Decode(mf)
-	if err != nil {
-		return err
-	}
-	defer streamer.Close()
-
-	resampled := beep.Resample(4, format.SampleRate, sampleRate, streamer)
-
-	done := make(chan bool)
-	speaker.Play(beep.Seq(resampled, beep.Callback(func() {
-		done <- true
-	})))
-
-	<-done
-
-	return nil
-}
-
 func playRnd() {
-	for playing {
+	for musicPlayer.Playing {
 		// select a random artist, with probability adjusted proportionally to the number of songs by that artist (this finally solves the disproportionate frequency of 'The Tea Song' and 'Blessed Are The Teamakers')
 		var artist twedia.Artist
 		r := rand.Intn(artists.TotalSongs)
@@ -221,8 +191,14 @@ func playRnd() {
 }
 
 func stopPlayback() {
-	streamer.Close()
-	playing = false
+	err := musicPlayer.Stop()
+	if err != nil {
+		fmt.Println("Error stopping music player:", err)
+	}
+	err = speechPlayer.Stop()
+	if err != nil {
+		fmt.Println("Error stopping speech player:", err)
+	}
 	os.Create(config.MusicFile)
 }
 
@@ -260,28 +236,20 @@ func completeAction(a action) {
 			}
 		}
 
-		if streamer != nil {
-			streamer.Close()
+		err := musicPlayer.Stop()
+		if err != nil {
+			fmt.Println("Error stopping music player:", err)
 		}
-		playing = false
 		go play(artist, album, song)
 	case "tts":
-		wasPlaying := playing
-
 		// write spoken speech to file
 		fn := twedia.SynthesiseText(a.Text)
 
-		stopPlayback()
-
-		err := playFile(fn)
+		err := speechPlayer.PlayFile(fn)
 		if err != nil {
 			log.Println("Error playing synthesised speech:", err)
 		}
 		lastSpeech = time.Now()
-
-		if wasPlaying {
-			playRnd()
-		}
 	}
 }
 
@@ -334,15 +302,18 @@ func main() {
 		}
 		opt = strings.ToLower(strings.Replace(strings.Replace(opt, "\n", "", -1), "\r", "", -1))
 		if opt == "start" {
-			playing = true
+			musicPlayer.Playing = true
 			go playRnd()
 		} else if opt == "skip" {
-			streamer.Close()
+			err = musicPlayer.Skip()
+			if err != nil {
+				fmt.Println("Error skipping song:", err)
+			}
 		} else if opt == "stop" {
 			stopPlayback()
 		} else if opt == "select" {
 			artist, album, song := twedia.SelectSong(&artists)
-			playing = true
+			musicPlayer.Playing = true
 			go play(*artist, *album, *song)
 		} else if opt == "quit" {
 			break
