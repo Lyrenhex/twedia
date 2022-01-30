@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/faiface/beep"
+	"github.com/faiface/beep/effects"
 	"github.com/faiface/beep/mp3"
 	"github.com/faiface/beep/speaker"
 )
@@ -15,8 +16,10 @@ const (
 )
 
 type Player struct {
-	streamer beep.StreamSeekCloser
-	Playing  bool
+	closer  beep.StreamSeekCloser
+	ctrl    *beep.Ctrl
+	volume  *effects.Volume
+	Playing bool
 }
 
 func InitSpeaker() error {
@@ -39,27 +42,55 @@ func (p *Player) PlayFile(fn string) error {
 		return err
 	}
 
-	p.streamer, format, err = mp3.Decode(mf)
+	p.closer, format, err = mp3.Decode(mf)
 	if err != nil {
 		return err
 	}
-	defer p.streamer.Close()
+	defer p.closer.Close()
 
-	resampled := beep.Resample(4, format.SampleRate, sampleRate, p.streamer)
+	resampled := beep.Resample(4, format.SampleRate, sampleRate, p.closer)
 
 	done := make(chan bool)
-	speaker.Play(beep.Seq(resampled, beep.Callback(func() {
-		done <- true
-	})))
+	p.ctrl = &beep.Ctrl{
+		Streamer: beep.Seq(resampled, beep.Callback(func() {
+			done <- true
+		})),
+		Paused: false,
+	}
+
+	p.volume = &effects.Volume{
+		Streamer: p.ctrl,
+		Base:     2,
+		Volume:   0,
+		Silent:   false,
+	}
+
+	speaker.Play(p.volume)
 
 	<-done
 
 	return nil
 }
 
+func (p *Player) TogglePause() {
+	if p.closer != nil {
+		speaker.Lock()
+		p.ctrl.Paused = !p.ctrl.Paused
+		speaker.Unlock()
+	}
+}
+
+func (p *Player) AdjustVolume(deltaVolume float64) {
+	if p.closer != nil {
+		speaker.Lock()
+		p.volume.Volume += deltaVolume
+		speaker.Unlock()
+	}
+}
+
 func (p *Player) Skip() error {
-	if p.streamer != nil {
-		err := p.streamer.Close()
+	if p.closer != nil {
+		err := p.closer.Close()
 		if err != nil {
 			return err
 		}
@@ -68,12 +99,12 @@ func (p *Player) Skip() error {
 }
 
 func (p *Player) Stop() error {
-	if p.streamer != nil {
-		err := p.streamer.Close()
+	if p.closer != nil {
+		err := p.closer.Close()
 		if err != nil {
 			return err
 		} else {
-			p.streamer = nil
+			p.closer = nil
 		}
 	}
 	p.Playing = false

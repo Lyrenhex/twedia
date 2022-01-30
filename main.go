@@ -96,7 +96,8 @@ func init() {
 	
 Commands:
 	start : start playing random music
-	skip  : skips the current song
+	pause : pause / unpause the current song
+	skip  : skip the current song
 	stop  : stop playing music
 	select: play a specific song
 	quit  : exit program`)
@@ -245,10 +246,17 @@ func completeAction(a action) {
 		// write spoken speech to file
 		fn := twedia.SynthesiseText(a.Text)
 
+		// lower the music volume while the TTS occurs...
+		musicPlayer.AdjustVolume(-1.0)
+
 		err := speechPlayer.PlayFile(fn)
 		if err != nil {
 			log.Println("Error playing synthesised speech:", err)
 		}
+
+		// and raise it again!
+		musicPlayer.AdjustVolume(1.0)
+
 		lastSpeech = time.Now()
 	}
 }
@@ -304,6 +312,8 @@ func main() {
 		if opt == "start" {
 			musicPlayer.Playing = true
 			go playRnd()
+		} else if opt == "pause" {
+			musicPlayer.TogglePause()
 		} else if opt == "skip" {
 			err = musicPlayer.Skip()
 			if err != nil {
