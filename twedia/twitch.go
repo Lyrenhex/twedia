@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -22,7 +23,9 @@ import (
 const twitchPubSubAPI string = "wss://pubsub-edge.twitch.tv"
 
 type twitchAPIResp struct {
-	Users []twitchUser `json:"data"`
+	Users   []twitchUser `json:"data"`
+	Status  int          `json:"status"`
+	Message string       `json:"message"`
 }
 type twitchUser struct {
 	ID          string `json:"id"`
@@ -121,7 +124,7 @@ func GetOAuthToken(clientID string) string {
 }
 
 // GetChannelID retrieves the channel ID for the OAuth token provided, and returns it as a string
-func GetChannelID(token, clientID string) string {
+func GetChannelID(token, clientID string) (string, error) {
 	chanInfo := &twitchAPIResp{}
 
 	client := &http.Client{}
@@ -139,7 +142,18 @@ func GetChannelID(token, clientID string) string {
 	}
 	json.Unmarshal(body, chanInfo)
 
-	return chanInfo.Users[0].ID
+	if chanInfo.Status != 0 {
+		// Something went wrong...
+		// Also love that the Twitch API reference doesn't seem to explain what it does if something goes wrong?
+		return "", errors.New(strings.ToLower(chanInfo.Message))
+	}
+
+	if len(chanInfo.Users) == 0 {
+		// ... we presumably had a successful response, but no users were returned. this... shouldn't happen?
+		return "", errors.New("no users returned")
+	}
+
+	return chanInfo.Users[0].ID, nil
 }
 
 // ListenChannelPoints starts a WebSocket listening to the Twitch PubSub API for Channel Point redemptions, which calls callback with the provided file handle and the reward title as a string

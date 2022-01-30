@@ -17,9 +17,8 @@ A largely self-contained solution for Twitch streamers* to play curated music co
 5. Create a configuration file following the schema described under `Config file`.
     - You **must** have a music collection metadata file stored on a live webserver; [example](https://lyrenhex.com/stream-content/music.json).
     - `oauthToken` must be generated for the Twitch IRC system; https://twitchapps.com/tmi/ -- access this **using the bot's account**, not your own (create one).
-    - `pubsubOauthToken` will be generated on first run of `twedia`; please follow the instructions provided and save the resulting token in the config file.
-        - This will expire periodically, re-triggering this process. Please update the saved token when this happens.
-        - You **must** restart `twedia` after saving the token in the config file; it should no longer ask for a token.
+    - `pubsubOauthToken` will be generated on first run of `twedia`; please follow the instructions provided in the Twedia console and the webpage that will be opened in your default browser.
+        - This will expire periodically, re-triggering this process.
     - `musicDir`'s directory must be organised such that, matching the music collection in JSON form, each artist has a folder containing folders for each of their albums, each of which contains the relevant songs in `mp3` format.
 6. Set the `TWITCH_CONFIG_FILE` environment variable to the absolute path of the newly created configuration file.
 7. Run the bot. :>
@@ -41,7 +40,7 @@ Subsequent configuration is handled by the config file, which should be structur
     "musicDir": "Absolute path to the folder containing the music (Artist -> Album -> Song.mp3)",
     "musicFile": "Absolute path to the file read by OBS for on-screen music credit.",
     "oauthToken": "OAuth Token for the bot's IRC connection to chat.",
-    "pubsubOauthToken": "OAuth Token for the bot's PubSub connection (different to above -- this is generated using the web auth flow on first run, and then can be populated here before restarting the bot)",
+    "pubsubOauthToken": "OAuth Token for the bot's PubSub connection (different to above -- this is generated using the web auth flow on first run)",
     "musicCollectionURL": "https://lyrenhex.com/stream-content/music.json (replace with your own :))",
     "chatCommands": [
         {

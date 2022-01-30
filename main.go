@@ -79,7 +79,18 @@ func init() {
 	// initialise the speaker to the sampleRate defined in constants
 	speaker.Init(sampleRate, sampleRate.N(bufferSize))
 
-	channelID = twedia.GetChannelID(config.PubsubOauthToken, config.ClientID)
+	for {
+		channelID, err = twedia.GetChannelID(config.PubsubOauthToken, config.ClientID)
+		if err == nil {
+			break
+		} else if err.Error() == "invalid oauth token" {
+			config.PubsubOauthToken = twedia.GetOAuthToken(config.ClientID)
+			config.saveConfig(os.Getenv("TWITCH_CONFIG_FILE"))
+		} else {
+			fmt.Println("Error obtaining channel ID:", err)
+			os.Exit(1)
+		}
+	}
 
 	// Seed the random Source such that we don't always listen to Blessed are the Teamakers...
 	rand.Seed(time.Now().UnixNano())
@@ -108,6 +119,26 @@ func loadConfig(s string) (Config, error) {
 	json.Unmarshal(b, &config)
 
 	return config, nil
+}
+
+func (c *Config) saveConfig(s string) error {
+	f, err := os.Open(s)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	json, err := json.Marshal(c)
+	if err != nil {
+		return err
+	}
+
+	err = ioutil.WriteFile(s, json, 0777)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func play(artist twedia.Artist, album twedia.Album, song twedia.Song) error {
