@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -139,6 +140,18 @@ func (c *Config) saveConfig(s string) error {
 	return nil
 }
 
+func exists(fp string) bool {
+	// cheers to https://stackoverflow.com/a/12518877/4897375 (CC-BY-SA 4.0)
+	if _, err := os.Stat(fp); err == nil {
+		return true
+	} else if errors.Is(err, os.ErrNotExist) {
+		return false
+	} else {
+		fmt.Printf("Unexpected error when verifying file existence: %s\n", err)
+		return false
+	}
+}
+
 func play(artist twedia.Artist, album twedia.Album, song twedia.Song) error {
 	var f *os.File
 	var err error
@@ -152,6 +165,21 @@ func play(artist twedia.Artist, album twedia.Album, song twedia.Song) error {
 
 	// open the song for playing
 	s := string(os.PathSeparator)
+
+	path := config.MusicDir + s + artist.Artist + s + album.Name + s + song.Title
+
+	if exists(path + ".mp3") {
+		path += ".mp3"
+	} else if exists(path + ".wav") {
+		path += ".wav"
+	} else if exists(path + ".ogg") {
+		path += ".ogg"
+	} else if exists(path + ".flac") {
+		path += ".flac"
+	} else {
+		fmt.Println("Song file cannot be found: " + path)
+		return errors.New("Song file cannot be found: " + path)
+	}
 
 	f.WriteString(fmt.Sprintf("\n%s, by %s", song.Title, artist.Artist))
 	if song.URL != "" {
