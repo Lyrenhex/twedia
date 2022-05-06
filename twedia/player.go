@@ -1,13 +1,19 @@
 package twedia
 
 import (
+	"errors"
+	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/faiface/beep"
 	"github.com/faiface/beep/effects"
+	"github.com/faiface/beep/flac"
 	"github.com/faiface/beep/mp3"
 	"github.com/faiface/beep/speaker"
+	"github.com/faiface/beep/vorbis"
+	"github.com/faiface/beep/wav"
 )
 
 const (
@@ -42,9 +48,30 @@ func (p *Player) PlayFile(fn string) error {
 		return err
 	}
 
-	p.closer, format, err = mp3.Decode(mf)
-	if err != nil {
-		return err
+	ext := filepath.Ext(fn)
+	if ext == ".mp3" {
+		p.closer, format, err = mp3.Decode(mf)
+		if err != nil {
+			return err
+		}
+	} else if ext == ".wav" {
+		p.closer, format, err = wav.Decode(mf)
+		if err != nil {
+			return err
+		}
+	} else if ext == ".ogg" {
+		p.closer, format, err = vorbis.Decode(mf)
+		if err != nil {
+			return err
+		}
+	} else if ext == ".flac" {
+		p.closer, format, err = flac.Decode(mf)
+		if err != nil {
+			return err
+		}
+	} else {
+		fmt.Println("Unrecognised file type: " + fn)
+		return errors.New("Unrecognised file type: " + fn)
 	}
 	defer p.closer.Close()
 
