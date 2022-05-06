@@ -188,7 +188,7 @@ func play(artist twedia.Artist, album twedia.Album, song twedia.Song) error {
 		t.Say(config.Channel, fmt.Sprintf("Playing %s by %s.", song.Title, artist.Artist))
 	}
 
-	musicPlayer.PlayFile(config.MusicDir + s + artist.Artist + s + album.Name + s + song.Title + ".mp3")
+	musicPlayer.PlayFile(path)
 
 	// clear the current song from the now playing file list
 	os.Create(config.MusicFile)
