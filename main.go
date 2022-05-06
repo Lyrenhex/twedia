@@ -154,7 +154,11 @@ func play(artist twedia.Artist, album twedia.Album, song twedia.Song) error {
 	s := string(os.PathSeparator)
 
 	f.WriteString(fmt.Sprintf("\n%s, by %s", song.Title, artist.Artist))
-	t.Say(config.Channel, fmt.Sprintf("Playing %s by %s. Listen on YouTube: %s", song.Title, artist.Artist, song.URL))
+	if song.URL != "" {
+		t.Say(config.Channel, fmt.Sprintf("Playing %s by %s. Listen on YouTube: %s", song.Title, artist.Artist, song.URL))
+	} else {
+		t.Say(config.Channel, fmt.Sprintf("Playing %s by %s.", song.Title, artist.Artist))
+	}
 
 	musicPlayer.PlayFile(config.MusicDir + s + artist.Artist + s + album.Name + s + song.Title + ".mp3")
 
@@ -218,30 +222,38 @@ func completeAction(a action) {
 		var artist twedia.Artist
 		var album twedia.Album
 		var song twedia.Song
-		for _, ar := range artists.Artists {
-			if strings.EqualFold(ar.Artist, a.Artist) {
-				artist = ar
-				for _, al := range ar.Albums {
-					if strings.EqualFold(al.Name, a.Album) {
-						album = al
-						for _, s := range al.Songs {
-							if strings.EqualFold(s.Title, a.Song) {
-								song = s
-								break
+		if a.Artist != "" {
+			for _, ar := range artists.Artists {
+				if strings.EqualFold(ar.Artist, a.Artist) {
+					artist = ar
+					for _, al := range ar.Albums {
+						if strings.EqualFold(al.Name, a.Album) {
+							album = al
+							for _, s := range al.Songs {
+								if strings.EqualFold(s.Title, a.Song) {
+									song = s
+									break
+								}
 							}
+							break
 						}
-						break
 					}
+					break
 				}
-				break
 			}
-		}
 
-		err := musicPlayer.Stop()
-		if err != nil {
-			fmt.Println("Error stopping music player:", err)
+			err := musicPlayer.Stop()
+			if err != nil {
+				fmt.Println("Error stopping music player:", err)
+			}
+			go play(artist, album, song)
+		} else {
+			err := musicPlayer.Stop()
+			if err != nil {
+				fmt.Println("Error stopping music player:", err)
+			}
+			go playRnd()
 		}
-		go play(artist, album, song)
 	case "tts":
 		// write spoken speech to file
 		fn := twedia.SynthesiseText(a.Text)
