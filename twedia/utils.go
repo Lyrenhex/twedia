@@ -36,24 +36,21 @@ type Music struct {
 	TotalSongs int
 }
 
-// GetSongs populates the provided Music object with the song database found at the URL specified in the TWITCH_SONG_LINK_DATABASE_URL environment variable
+// GetSongs populates the provided Music object with the song database found at the URL `songsCollectionURL`.
 func GetSongs(a *Music, songsCollectionURL string) error {
-	c := http.Client{
-		Timeout: time.Second * 5,
-	}
-	req, err := http.NewRequest(http.MethodGet, songsCollectionURL, nil)
-	if err != nil {
-		return err
-	}
-
-	res, err := c.Do(req)
-	if err != nil {
-		return err
-	}
-
-	data, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		return err
+	var data []byte
+	var err error
+	if strings.HasPrefix(songsCollectionURL, "http") {
+		// Internet resource over HTTP(S)
+		data, err = getSongsHttp(songsCollectionURL)
+		if err != nil {
+			fmt.Println("Unable to retrieve song collection over HTTP(S) from " + songsCollectionURL + ": " + err.Error())
+		}
+	} else {
+		data, err = getSongsFile(songsCollectionURL)
+		if err != nil {
+			fmt.Println("Unable to retrieve song collection from file `" + songsCollectionURL + "`: " + err.Error())
+		}
 	}
 
 	err = json.Unmarshal(data, a)
@@ -71,6 +68,43 @@ func GetSongs(a *Music, songsCollectionURL string) error {
 	}
 
 	return nil
+}
+
+func getSongsHttp(songsCollectionURL string) ([]byte, error) {
+	c := http.Client{
+		Timeout: time.Second * 5,
+	}
+	req, err := http.NewRequest(http.MethodGet, songsCollectionURL, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := c.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	return data, nil
+}
+
+func getSongsFile(songsCollectionPath string) ([]byte, error) {
+	f, err := os.Open(songsCollectionPath)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	data, err := ioutil.ReadAll(f)
+	if err != nil {
+		return nil, err
+	}
+
+	return data, nil
 }
 
 // SelectSong asks the user for a song from the artists Music object, and returns pointers to the selected Artist, Album, and Song object within
