@@ -71,7 +71,7 @@ func init() {
 
 	err = twedia.InitSpeaker()
 	if err != nil {
-		fmt.Println("Error initialising speaker:", err)
+		log.Println("Error initialising speaker:", err)
 	}
 
 	musicPlayer = twedia.NewPlayer()
@@ -85,7 +85,7 @@ func init() {
 			config.PubsubOauthToken = twedia.GetOAuthToken(config.ClientID)
 			config.saveConfig(os.Getenv("TWITCH_CONFIG_FILE"))
 		} else {
-			fmt.Println("Error obtaining channel ID:", err)
+			log.Println("Error obtaining channel ID:", err)
 			os.Exit(1)
 		}
 	}
@@ -177,7 +177,7 @@ func play(artist twedia.Artist, album twedia.Album, song twedia.Song) error {
 	} else if exists(path + ".flac") {
 		path += ".flac"
 	} else {
-		fmt.Println("Song file cannot be found: " + path)
+		log.Println("Song file cannot be found: " + path)
 		return errors.New("Song file cannot be found: " + path)
 	}
 
@@ -226,11 +226,11 @@ func playRnd() {
 func stopPlayback() {
 	err := musicPlayer.Stop()
 	if err != nil {
-		fmt.Println("Error stopping music player:", err)
+		log.Println("Error stopping music player:", err)
 	}
 	err = speechPlayer.Stop()
 	if err != nil {
-		fmt.Println("Error stopping speech player:", err)
+		log.Println("Error stopping speech player:", err)
 	}
 	os.Create(config.MusicFile)
 }
@@ -272,13 +272,13 @@ func completeAction(a action) {
 
 			err := musicPlayer.Stop()
 			if err != nil {
-				fmt.Println("Error stopping music player:", err)
+				log.Println("Error stopping music player:", err)
 			}
 			go play(artist, album, song)
 		} else {
 			err := musicPlayer.Stop()
 			if err != nil {
-				fmt.Println("Error stopping music player:", err)
+				log.Println("Error stopping music player:", err)
 			}
 			go playRnd()
 		}
@@ -321,7 +321,7 @@ func main() {
 	t.Join(config.Channel)
 
 	t.OnConnect(func() {
-		log.Println("Connected to Twitch chat")
+		log.Println("Connected to Twitch chat as " + config.Username)
 		r <- true
 	})
 
@@ -357,7 +357,7 @@ func main() {
 		} else if opt == "skip" {
 			err = musicPlayer.Skip()
 			if err != nil {
-				fmt.Println("Error skipping song:", err)
+				log.Println("Error skipping song:", err)
 			}
 		} else if opt == "stop" {
 			stopPlayback()

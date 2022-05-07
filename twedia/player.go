@@ -2,7 +2,7 @@ package twedia
 
 import (
 	"errors"
-	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -70,7 +70,7 @@ func (p *Player) PlayFile(fn string) error {
 			return err
 		}
 	} else {
-		fmt.Println("Unrecognised file type: " + fn)
+		log.Println("Unrecognised file type: " + fn)
 		return errors.New("Unrecognised file type: " + fn)
 	}
 	defer p.closer.Close()

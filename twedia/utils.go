@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -44,12 +45,12 @@ func GetSongs(a *Music, songsCollectionURL string) error {
 		// Internet resource over HTTP(S)
 		data, err = getSongsHttp(songsCollectionURL)
 		if err != nil {
-			fmt.Println("Unable to retrieve song collection over HTTP(S) from " + songsCollectionURL + ": " + err.Error())
+			log.Println("Unable to retrieve song collection over HTTP(S) from " + songsCollectionURL + ": " + err.Error())
 		}
 	} else {
 		data, err = getSongsFile(songsCollectionURL)
 		if err != nil {
-			fmt.Println("Unable to retrieve song collection from file `" + songsCollectionURL + "`: " + err.Error())
+			log.Println("Unable to retrieve song collection from file `" + songsCollectionURL + "`: " + err.Error())
 		}
 	}
 
