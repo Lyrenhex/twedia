@@ -283,6 +283,8 @@ func completeAction(a action) {
 			go playRnd()
 		}
 	case "tts":
+		lastSpeech = time.Now()
+
 		// write spoken speech to file
 		fn := twedia.SynthesiseText(a.Text)
 
@@ -296,8 +298,6 @@ func completeAction(a action) {
 
 		// and raise it again!
 		musicPlayer.AdjustVolume(1.0)
-
-		lastSpeech = time.Now()
 	}
 }
 
