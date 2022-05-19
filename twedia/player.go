@@ -47,6 +47,7 @@ func (p *Player) PlayFile(fn string) error {
 	if err != nil {
 		return err
 	}
+	defer mf.Close()
 
 	ext := filepath.Ext(fn)
 	if ext == ".mp3" {
