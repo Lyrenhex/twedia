@@ -52,29 +52,20 @@ func (p *Player) PlayFile(fn string) error {
 	ext := filepath.Ext(fn)
 	if ext == ".mp3" {
 		p.closer, format, err = mp3.Decode(mf)
-		if err != nil {
-			return err
-		}
 	} else if ext == ".wav" {
 		p.closer, format, err = wav.Decode(mf)
-		if err != nil {
-			return err
-		}
 	} else if ext == ".ogg" {
 		p.closer, format, err = vorbis.Decode(mf)
-		if err != nil {
-			return err
-		}
 	} else if ext == ".flac" {
 		p.closer, format, err = flac.Decode(mf)
-		if err != nil {
-			return err
-		}
 	} else {
 		log.Println("Unrecognised file type: " + fn)
 		return errors.New("Unrecognised file type: " + fn)
 	}
 	defer p.closer.Close()
+	if err != nil {
+		return err
+	}
 
 	resampled := beep.Resample(4, format.SampleRate, sampleRate, p.closer)
 

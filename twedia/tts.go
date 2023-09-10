@@ -6,7 +6,7 @@ import (
 	"log"
 
 	texttospeech "cloud.google.com/go/texttospeech/apiv1"
-	texttospeechpb "google.golang.org/genproto/googleapis/cloud/texttospeech/v1"
+	"cloud.google.com/go/texttospeech/apiv1/texttospeechpb"
 )
 
 // SynthesiseText uses the Google Cloud Text-to-Speech API to generate an MP3 audio file speaking the provided string t, and returns the file name of the created MP3 file.
@@ -28,10 +28,11 @@ func SynthesiseText(t string) string {
 			InputSource: &texttospeechpb.SynthesisInput_Text{Text: t},
 		},
 		// Build the voice request, select the language code ("en-US") and the SSML
-		// voice gender ("neutral").
+		// voice gender ("female", since apparently Google broke the neutral voice
+		// (aside: ffs, Google)).
 		Voice: &texttospeechpb.VoiceSelectionParams{
 			LanguageCode: "en-GB",
-			SsmlGender:   texttospeechpb.SsmlVoiceGender_NEUTRAL,
+			SsmlGender:   texttospeechpb.SsmlVoiceGender_FEMALE,
 		},
 		// Select the type of audio file you want returned.
 		AudioConfig: &texttospeechpb.AudioConfig{
