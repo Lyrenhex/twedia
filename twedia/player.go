@@ -62,7 +62,7 @@ func (p *Player) PlayFile(fn string) error {
 		log.Println("Unrecognised file type: " + fn)
 		return errors.New("Unrecognised file type: " + fn)
 	}
-	defer p.closer.Close()
+	defer p.Stop()
 	if err != nil {
 		return err
 	}
