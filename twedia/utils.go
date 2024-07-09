@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -85,7 +85,7 @@ func getSongsHttp(songsCollectionURL string) ([]byte, error) {
 		return nil, err
 	}
 
-	data, err := ioutil.ReadAll(res.Body)
+	data, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +100,7 @@ func getSongsFile(songsCollectionPath string) ([]byte, error) {
 	}
 	defer f.Close()
 
-	data, err := ioutil.ReadAll(f)
+	data, err := io.ReadAll(f)
 	if err != nil {
 		return nil, err
 	}

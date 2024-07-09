@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"math/rand"
 	"os"
@@ -128,7 +128,7 @@ func loadConfig(s string) (Config, error) {
 	}
 	defer f.Close()
 
-	b, _ := ioutil.ReadAll(f)
+	b, _ := io.ReadAll(f)
 
 	json.Unmarshal(b, &config)
 
@@ -147,7 +147,7 @@ func (c *Config) saveConfig(s string) error {
 		return err
 	}
 
-	err = ioutil.WriteFile(s, json, 0777)
+	err = os.WriteFile(s, json, 0777)
 	if err != nil {
 		return err
 	}

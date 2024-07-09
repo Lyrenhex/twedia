@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"math/rand"
 	"net/http"
@@ -136,7 +135,7 @@ func GetChannelID(token, clientID string) (string, error) {
 		panic(err)
 	}
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		panic(err)
 	}
@@ -169,7 +168,6 @@ func ListenChannelPoints(chanID, clientID, oauthToken string, callback func(Twit
 			time.Sleep(time.Second + (time.Duration(rand.Intn(1000))*time.Millisecond)*time.Duration(attempts))
 			continue
 		}
-		defer c.Close()
 
 		listenReq := twitchPubSub{
 			Type: "LISTEN",
