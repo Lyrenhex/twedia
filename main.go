@@ -227,7 +227,7 @@ func play(artist twedia.Artist, album twedia.Album, song twedia.Song) error {
 }
 
 func playRnd() {
-	for musicPlayer.Playing {
+	for {
 		// select a random artist, with probability adjusted proportionally to the number of songs by that artist (this finally solves the disproportionate frequency of 'The Tea Song' and 'Blessed Are The Teamakers')
 		var artist twedia.Artist
 		r := rand.Intn(artists.TotalSongs)
@@ -249,6 +249,9 @@ func playRnd() {
 		if err != nil {
 			log.Println(err)
 			continue
+		}
+		if !musicPlayer.Playing {
+			break
 		}
 	}
 }
