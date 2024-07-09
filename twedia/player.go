@@ -126,6 +126,5 @@ func (p *Player) Stop() error {
 			p.closer = nil
 		}
 	}
-	p.Playing = false
 	return nil
 }

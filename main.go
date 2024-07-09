@@ -197,9 +197,10 @@ func play(artist twedia.Artist, album twedia.Album, song twedia.Song) error {
 	found := false
 	for _, f := range files {
 		fn := strings.ToLower(f.Name())
-		if strings.Contains(fn, strings.ToLower(song.Title)) && (strings.Contains(fn, ".mp3") || strings.Contains(fn, ".flac") || strings.Contains(fn, ".ogg") || strings.Contains(fn, ".wav") || strings.Contains(fn, ".m4a")) {
+		if strings.Contains(fn, strings.ToLower(song.Title)) && (strings.Contains(fn, ".mp3") || strings.Contains(fn, ".flac") || strings.Contains(fn, ".ogg") || strings.Contains(fn, ".wav")) {
 			path += f.Name()
 			found = true
+			break
 		}
 	}
 	if !found {
@@ -214,7 +215,10 @@ func play(artist twedia.Artist, album twedia.Album, song twedia.Song) error {
 		t.Say(config.Channel, fmt.Sprintf("Playing %s by %s.", song.Title, artist.Artist))
 	}
 
-	musicPlayer.PlayFile(path)
+	err = musicPlayer.PlayFile(path)
+	if err != nil {
+		log.Println("Error playing file "+path+":", err)
+	}
 
 	// clear the current song from the now playing file list
 	os.Create(config.MusicFile)
@@ -250,6 +254,7 @@ func playRnd() {
 }
 
 func stopPlayback() {
+	musicPlayer.Playing = false
 	err := musicPlayer.Stop()
 	if err != nil {
 		log.Println("Error stopping music player:", err)
@@ -393,7 +398,6 @@ func main() {
 			stopPlayback()
 		} else if opt == "select" {
 			artist, album, song := twedia.SelectSong(&artists)
-			musicPlayer.Playing = true
 			go play(*artist, *album, *song)
 		} else if opt == "quit" {
 			break
