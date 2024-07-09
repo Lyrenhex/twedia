@@ -187,19 +187,24 @@ func play(artist twedia.Artist, album twedia.Album, song twedia.Song) error {
 		albumName = song.Title
 	}
 
-	path := config.MusicDir + s + artist.Artist + s + albumName + s + song.Title
+	path := config.MusicDir + s + artist.Artist + s + albumName + s
 
-	if exists(path + ".mp3") {
-		path += ".mp3"
-	} else if exists(path + ".wav") {
-		path += ".wav"
-	} else if exists(path + ".ogg") {
-		path += ".ogg"
-	} else if exists(path + ".flac") {
-		path += ".flac"
-	} else {
-		log.Println("Song file cannot be found: " + path)
-		return errors.New("Song file cannot be found: " + path)
+	files, err := os.ReadDir(path)
+	if err != nil {
+		return err
+	}
+
+	found := false
+	for _, f := range files {
+		fn := strings.ToLower(f.Name())
+		if strings.Contains(fn, strings.ToLower(song.Title)) && (strings.Contains(fn, ".mp3") || strings.Contains(fn, ".flac") || strings.Contains(fn, ".ogg") || strings.Contains(fn, ".wav") || strings.Contains(fn, ".m4a")) {
+			path += f.Name()
+			found = true
+		}
+	}
+	if !found {
+		log.Println("Song file cannot be found: " + path + song.Title)
+		return errors.New("Song file cannot be found: " + path + song.Title)
 	}
 
 	f.WriteString(fmt.Sprintf("\n%s, by %s", song.Title, artist.Artist))
