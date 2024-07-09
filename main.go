@@ -2,6 +2,8 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -64,6 +66,10 @@ func init() {
 		panic(err)
 	}
 
+	if !exists("tts") {
+		os.Mkdir("tts", 0644)
+	}
+
 	err = twedia.GetSongs(&artists, config.MusicCollectionURL)
 	if err != nil {
 		log.Fatal(err)
@@ -102,6 +108,15 @@ Commands:
 	stop  : stop playing music
 	select: play a specific song
 	quit  : exit program`)
+}
+
+func hashString(s string) string {
+	h := sha256.New()
+	h.Write([]byte(s))
+	bs := h.Sum(nil)
+	buf := new(bytes.Buffer)
+	fmt.Fprintf(buf, "%x", bs)
+	return buf.String()
 }
 
 func loadConfig(s string) (Config, error) {
@@ -285,8 +300,12 @@ func completeAction(a action) {
 	case "tts":
 		lastSpeech = time.Now()
 
-		// write spoken speech to file
-		fn := twedia.SynthesiseText(a.Text)
+		fn := "tts/" + hashString(a.Text) + ".mp3"
+
+		if !exists(fn) {
+			// write spoken speech to file
+			twedia.SynthesiseText(a.Text, fn)
+		}
 
 		// lower the music volume while the TTS occurs...
 		musicPlayer.AdjustVolume(-1.0)
