@@ -22,6 +22,7 @@ A largely self-contained solution for Twitch streamers* to play curated music co
     - `pubsubOauthToken` will be generated on first run of `twedia`; please follow the instructions provided in the Twedia console and the webpage that will be opened in your default browser.
         - This will expire periodically, re-triggering this process.
     - `musicDir`'s directory must be organised such that, matching the music collection in JSON form, each artist has a folder containing folders for each of their albums, each of which contains the relevant songs in `mp3` format.
+        - Singles should be grouped in the JSON under a `[Singles]` album, and should then be organised such that each single is at `artist/single/single.ext`, where `artist` is the artist name, `single` is the song title, and `ext` is the file extension.
 6. Set the `TWITCH_CONFIG_FILE` environment variable to the absolute path of the newly created configuration file.
 7. Run the bot. :>
 

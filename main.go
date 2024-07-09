@@ -181,7 +181,13 @@ func play(artist twedia.Artist, album twedia.Album, song twedia.Song) error {
 	// open the song for playing
 	s := string(os.PathSeparator)
 
-	path := config.MusicDir + s + artist.Artist + s + album.Name + s + song.Title
+	// handle singles: their album name is the same as the song name
+	albumName := album.Name
+	if albumName == "[Singles]" {
+		albumName = song.Title
+	}
+
+	path := config.MusicDir + s + artist.Artist + s + albumName + s + song.Title
 
 	if exists(path + ".mp3") {
 		path += ".mp3"
