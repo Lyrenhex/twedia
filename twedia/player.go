@@ -22,10 +22,11 @@ const (
 )
 
 type Player struct {
-	closer  beep.StreamSeekCloser
-	ctrl    *beep.Ctrl
-	volume  *effects.Volume
-	Playing bool
+	closer beep.StreamSeekCloser
+	ctrl   *beep.Ctrl
+	volume *effects.Volume
+	// Whether the `Player` will continue playing music once the current track has concluded.
+	ContinuingPlayback bool
 }
 
 func InitSpeaker() error {
@@ -35,7 +36,7 @@ func InitSpeaker() error {
 
 func NewPlayer() Player {
 	return Player{
-		Playing: false,
+		ContinuingPlayback: false,
 	}
 }
 

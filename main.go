@@ -14,8 +14,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gempir/go-twitch-irc"
+	tirc "github.com/gempir/go-twitch-irc"
 	"github.com/lyrenhex/twedia/twedia"
+	"github.com/lyrenhex/twedia/twitch"
 )
 
 type Config struct {
@@ -52,7 +53,7 @@ type action struct {
 
 var config Config
 var artists twedia.Music
-var t *twitch.Client
+var t *tirc.Client
 var channelID string
 var musicPlayer twedia.Player
 var speechPlayer twedia.Player
@@ -84,11 +85,11 @@ func init() {
 	speechPlayer = twedia.NewPlayer()
 
 	for {
-		channelID, err = twedia.GetChannelID(config.PubsubOauthToken, config.ClientID)
+		channelID, err = twitch.GetChannelID(config.PubsubOauthToken, config.ClientID)
 		if err == nil {
 			break
 		} else if err.Error() == "invalid oauth token" {
-			config.PubsubOauthToken = twedia.GetOAuthToken(config.ClientID)
+			config.PubsubOauthToken = twitch.GetOAuthToken(config.ClientID)
 			config.saveConfig(os.Getenv("TWITCH_CONFIG_FILE"))
 		} else {
 			log.Println("Error obtaining channel ID:", err)
@@ -167,7 +168,7 @@ func exists(fp string) bool {
 	}
 }
 
-func play(artist twedia.Artist, album twedia.Album, song twedia.Song) error {
+func playTrack(artist twedia.Artist, album twedia.Album, song twedia.Song) error {
 	var f *os.File
 	var err error
 	for {
@@ -226,38 +227,53 @@ func play(artist twedia.Artist, album twedia.Album, song twedia.Song) error {
 	return nil
 }
 
-func playRnd() {
+func play(artist *twedia.Artist, album *twedia.Album, song *twedia.Song) {
 	for {
-		// select a random artist, with probability adjusted proportionally to the number of songs by that artist (this finally solves the disproportionate frequency of 'The Tea Song' and 'Blessed Are The Teamakers')
-		var artist twedia.Artist
-		r := rand.Intn(artists.TotalSongs)
-		for _, a := range artists.Artists {
-			if r < a.TotalSongs {
-				artist = a
-				break
+		resolvedArtist := artist
+		resolvedAlbum := album
+		resolvedSong := song
+		if resolvedArtist == nil {
+			// select a random artist, with probability adjusted proportionally to the number of songs by that artist (this finally solves the disproportionate frequency of 'The Tea Song' and 'Blessed Are The Teamakers')
+			r := rand.Intn(artists.TotalSongs)
+			for _, a := range artists.Artists {
+				if r < a.TotalSongs {
+					resolvedArtist = &a
+					break
+				}
+				r -= a.TotalSongs
 			}
-			r -= a.TotalSongs
 		}
 
-		// now select a random album by that artist
-		album := artist.Albums[rand.Intn(len(artist.Albums))]
+		if resolvedAlbum == nil {
+			// now select a random album by that artist
+			r := rand.Intn(resolvedArtist.TotalSongs)
+			for _, al := range resolvedArtist.Albums {
+				if r < al.TotalSongs {
+					resolvedAlbum = &al
+					break
+				}
+				r -= al.TotalSongs
+			}
+		}
 
-		// and a random song from that album
-		song := album.Songs[rand.Intn(len(album.Songs))]
+		if resolvedSong == nil {
+			// and a random song from that album
+			resolvedSong = &resolvedAlbum.Songs[rand.Intn(len(resolvedAlbum.Songs))]
+		}
 
-		err := play(artist, album, song)
+		err := playTrack(*resolvedArtist, *resolvedAlbum, *resolvedSong)
 		if err != nil {
 			log.Println(err)
 			continue
 		}
-		if !musicPlayer.Playing {
+		if !musicPlayer.ContinuingPlayback {
 			break
 		}
 	}
 }
 
 func stopPlayback() {
-	musicPlayer.Playing = false
+	musicPlayer.ContinuingPlayback = false
 	err := musicPlayer.Stop()
 	if err != nil {
 		log.Println("Error stopping music player:", err)
@@ -269,7 +285,7 @@ func stopPlayback() {
 	os.Create(config.MusicFile)
 }
 
-func rewardCallback(r twedia.TwitchRedemption) {
+func rewardCallback(r twitch.Redemption) {
 	for _, rewardAction := range config.PointRewards {
 		if strings.EqualFold(r.Reward.Title, rewardAction.Title) {
 			completeAction(rewardAction.Action)
@@ -280,42 +296,49 @@ func rewardCallback(r twedia.TwitchRedemption) {
 
 func completeAction(a action) {
 	switch a.Type {
-	case "song":
-		var artist twedia.Artist
-		var album twedia.Album
-		var song twedia.Song
+	case "start", "select", "song":
+		var artist *twedia.Artist = nil
+		var album *twedia.Album = nil
+		var song *twedia.Song = nil
+
 		if a.Artist != "" {
 			for _, ar := range artists.Artists {
 				if strings.EqualFold(ar.Artist, a.Artist) {
-					artist = ar
-					for _, al := range ar.Albums {
-						if strings.EqualFold(al.Name, a.Album) {
-							album = al
-							for _, s := range al.Songs {
-								if strings.EqualFold(s.Title, a.Song) {
-									song = s
-									break
-								}
-							}
-							break
-						}
-					}
+					artist = &ar
 					break
 				}
 			}
-
-			err := musicPlayer.Stop()
-			if err != nil {
-				log.Println("Error stopping music player:", err)
-			}
-			go play(artist, album, song)
-		} else {
-			err := musicPlayer.Stop()
-			if err != nil {
-				log.Println("Error stopping music player:", err)
-			}
-			go playRnd()
 		}
+
+		if artist != nil && a.Album != "" {
+			for _, al := range artist.Albums {
+				if strings.EqualFold(al.Name, a.Album) {
+					album = &al
+					break
+				}
+			}
+		}
+
+		if album != nil && a.Song != "" {
+			for _, s := range album.Songs {
+				if strings.EqualFold(s.Title, a.Song) {
+					song = &s
+					break
+				}
+			}
+		}
+
+		err := musicPlayer.Stop()
+		if err != nil {
+			log.Println("Error stopping music player:", err)
+		}
+		switch a.Type {
+		case "start":
+			musicPlayer.ContinuingPlayback = true
+		case "select", "song":
+			musicPlayer.ContinuingPlayback = false
+		}
+		go play(artist, album, song)
 	case "tts":
 		lastSpeech = time.Now()
 
@@ -343,9 +366,9 @@ func main() {
 	r := make(chan bool)
 
 	// Set up Twitch bot
-	t = twitch.NewClient(config.Username, "oauth:"+config.OauthToken)
+	t = tirc.NewClient(config.Username, "oauth:"+config.OauthToken)
 
-	t.OnNewMessage(func(c string, u twitch.User, m twitch.Message) {
+	t.OnNewMessage(func(c string, u tirc.User, m tirc.Message) {
 		if time.Since(lastSpeech) > (5 * time.Minute) {
 			for _, chatCommand := range config.ChatCommands {
 				if strings.EqualFold(strings.Split(m.Text, " ")[0], chatCommand.Trigger) {
@@ -372,8 +395,9 @@ func main() {
 
 	<-r
 
-	go twedia.ListenChannelPoints(channelID, config.ClientID, config.PubsubOauthToken, rewardCallback)
+	go twitch.ListenChannelPoints(channelID, config.ClientID, config.PubsubOauthToken, rewardCallback)
 
+main:
 	for {
 		fmt.Print("> ")
 
@@ -387,23 +411,27 @@ func main() {
 			}
 		}
 		opt = strings.ToLower(strings.Replace(strings.Replace(opt, "\n", "", -1), "\r", "", -1))
-		if opt == "start" {
-			musicPlayer.Playing = true
-			go playRnd()
-		} else if opt == "pause" {
+		switch opt {
+		case "start", "select":
+			artist, album, song := twedia.SelectSong(&artists)
+			switch opt {
+			case "start":
+				musicPlayer.ContinuingPlayback = true
+			case "select":
+				musicPlayer.ContinuingPlayback = false
+			}
+			go play(artist, album, song)
+		case "pause":
 			musicPlayer.TogglePause()
-		} else if opt == "skip" {
+		case "skip":
 			err = musicPlayer.Skip()
 			if err != nil {
 				log.Println("Error skipping song:", err)
 			}
-		} else if opt == "stop" {
+		case "stop":
 			stopPlayback()
-		} else if opt == "select" {
-			artist, album, song := twedia.SelectSong(&artists)
-			go play(*artist, *album, *song)
-		} else if opt == "quit" {
-			break
+		case "quit":
+			break main
 		}
 	}
 

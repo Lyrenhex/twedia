@@ -20,8 +20,9 @@ type Song struct {
 
 // Album is a structure storing the album name and a dynamic array of Song objects to represent the songs present on an album.
 type Album struct {
-	Name  string `json:"name"`
-	Songs []Song `json:"songs"`
+	Name       string `json:"name"`
+	Songs      []Song `json:"songs"`
+	TotalSongs int
 }
 
 // Artist is a structure storing the artist name and a dynamic array of Album objects to represent the artist's albums.
@@ -60,12 +61,13 @@ func GetSongs(a *Music, songsCollectionURL string) error {
 	}
 
 	for i, ar := range (*a).Artists {
-		for _, al := range ar.Albums {
+		for j, al := range ar.Albums {
 			for range al.Songs {
-				(*a).TotalSongs++
-				(*a).Artists[i].TotalSongs++
+				(*a).Artists[i].Albums[j].TotalSongs++
 			}
+			(*a).Artists[i].TotalSongs += (*a).Artists[i].Albums[j].TotalSongs
 		}
+		(*a).TotalSongs += (*a).Artists[i].TotalSongs
 	}
 
 	return nil
@@ -117,7 +119,7 @@ func SelectSong(artists *Music) (*Artist, *Album, *Song) {
 	var sAr string
 	var err error
 	for artist == nil {
-		fmt.Print("Artist name: ")
+		fmt.Print("Artist name (optional): ")
 
 		reader := bufio.NewReader(os.Stdin)
 		sAr, err = reader.ReadString('\n')
@@ -125,6 +127,9 @@ func SelectSong(artists *Music) (*Artist, *Album, *Song) {
 			continue
 		}
 		sAr = strings.ToLower(strings.Replace(strings.Replace(sAr, "\n", "", -1), "\r", "", -1))
+		if sAr == "" {
+			return nil, nil, nil
+		}
 
 		for _, ar := range (*artists).Artists {
 			if strings.ToLower(ar.Artist) == sAr {
@@ -135,7 +140,7 @@ func SelectSong(artists *Music) (*Artist, *Album, *Song) {
 	}
 	var sAl string
 	for album == nil {
-		fmt.Print("Album name: ")
+		fmt.Print("Album name (optional): ")
 
 		reader := bufio.NewReader(os.Stdin)
 		sAl, err = reader.ReadString('\n')
@@ -143,6 +148,9 @@ func SelectSong(artists *Music) (*Artist, *Album, *Song) {
 			continue
 		}
 		sAl = strings.ToLower(strings.Replace(strings.Replace(sAl, "\n", "", -1), "\r", "", -1))
+		if sAl == "" {
+			return artist, nil, nil
+		}
 
 		for _, al := range artist.Albums {
 			if strings.ToLower(al.Name) == sAl {
@@ -153,7 +161,7 @@ func SelectSong(artists *Music) (*Artist, *Album, *Song) {
 	}
 	var sSong string
 	for song == nil {
-		fmt.Print("Song name: ")
+		fmt.Print("Song name (optional): ")
 
 		reader := bufio.NewReader(os.Stdin)
 		sSong, err = reader.ReadString('\n')
@@ -161,6 +169,9 @@ func SelectSong(artists *Music) (*Artist, *Album, *Song) {
 			continue
 		}
 		sSong = strings.ToLower(strings.Replace(strings.Replace(sSong, "\n", "", -1), "\r", "", -1))
+		if sSong == "" {
+			return artist, album, nil
+		}
 
 		for _, s := range album.Songs {
 			if strings.ToLower(s.Title) == sSong {
