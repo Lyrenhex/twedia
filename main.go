@@ -35,8 +35,9 @@ type Config struct {
 }
 
 type command struct {
-	Trigger string      `json:"trigger"`
-	Action  soundAction `json:"action"`
+	Trigger    string      `json:"trigger"`
+	Sound      soundAction `json:"sound"`
+	VTubeState string      `json:"vtubeState"`
 }
 
 type reward struct {
@@ -374,7 +375,10 @@ func main() {
 		if time.Since(lastSpeech) > (5 * time.Minute) {
 			for _, chatCommand := range config.ChatCommands {
 				if strings.EqualFold(strings.Split(m.Text, " ")[0], chatCommand.Trigger) {
-					completeSoundAction(chatCommand.Action)
+					completeSoundAction(chatCommand.Sound)
+					if chatCommand.VTubeState != "" {
+						veadotube.SetState(chatCommand.VTubeState)
+					}
 					return
 				}
 			}
