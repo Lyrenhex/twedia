@@ -17,6 +17,7 @@ import (
 	tirc "github.com/gempir/go-twitch-irc"
 	"github.com/lyrenhex/twedia/twedia"
 	"github.com/lyrenhex/twedia/twitch"
+	"github.com/lyrenhex/twedia/veadotube"
 )
 
 type Config struct {
@@ -34,16 +35,17 @@ type Config struct {
 }
 
 type command struct {
-	Trigger string `json:"trigger"`
-	Action  action `json:"action"`
+	Trigger string      `json:"trigger"`
+	Action  soundAction `json:"action"`
 }
 
 type reward struct {
-	Title  string `json:"rewardTitle"`
-	Action action `json:"action"`
+	Title      string      `json:"title"`
+	Sound      soundAction `json:"sound"`
+	VTubeState string      `json:"vtubeState"`
 }
 
-type action struct {
+type soundAction struct {
 	Type   string `json:"type"`
 	Text   string `json:"text"`
 	Artist string `json:"artist"`
@@ -83,6 +85,8 @@ func init() {
 
 	musicPlayer = twedia.NewPlayer()
 	speechPlayer = twedia.NewPlayer()
+
+	veadotube.Connect()
 
 	for {
 		channelID, err = twitch.GetChannelID(config.PubsubOauthToken, config.ClientID)
@@ -288,13 +292,16 @@ func stopPlayback() {
 func rewardCallback(r twitch.Redemption) {
 	for _, rewardAction := range config.PointRewards {
 		if strings.EqualFold(r.Reward.Title, rewardAction.Title) {
-			completeAction(rewardAction.Action)
+			completeSoundAction(rewardAction.Sound)
+			if rewardAction.VTubeState != "" {
+				veadotube.SetState(rewardAction.VTubeState)
+			}
 			return
 		}
 	}
 }
 
-func completeAction(a action) {
+func completeSoundAction(a soundAction) {
 	switch a.Type {
 	case "start", "select", "song":
 		var artist *twedia.Artist = nil
@@ -332,12 +339,7 @@ func completeAction(a action) {
 		if err != nil {
 			log.Println("Error stopping music player:", err)
 		}
-		switch a.Type {
-		case "start":
-			musicPlayer.ContinuingPlayback = true
-		case "select", "song":
-			musicPlayer.ContinuingPlayback = false
-		}
+		musicPlayer.ContinuingPlayback = a.Type == "start"
 		go play(artist, album, song)
 	case "tts":
 		lastSpeech = time.Now()
@@ -372,7 +374,7 @@ func main() {
 		if time.Since(lastSpeech) > (5 * time.Minute) {
 			for _, chatCommand := range config.ChatCommands {
 				if strings.EqualFold(strings.Split(m.Text, " ")[0], chatCommand.Trigger) {
-					completeAction(chatCommand.Action)
+					completeSoundAction(chatCommand.Action)
 					return
 				}
 			}
@@ -414,12 +416,7 @@ main:
 		switch opt {
 		case "start", "select":
 			artist, album, song := twedia.SelectSong(&artists)
-			switch opt {
-			case "start":
-				musicPlayer.ContinuingPlayback = true
-			case "select":
-				musicPlayer.ContinuingPlayback = false
-			}
+			musicPlayer.ContinuingPlayback = opt == "start"
 			go play(artist, album, song)
 		case "pause":
 			musicPlayer.TogglePause()

@@ -56,8 +56,8 @@ Subsequent configuration is handled by the config file, which should be structur
     ],
     "pointRewards": [
         {
-            "rewardTitle": "Play (Specific Song)",
-            "action": {
+            "title": "Play (Specific Song)",
+            "sound": {
                 "type": "song",
                 "artist": "Artist name",
                 "album": "Album name",
@@ -65,11 +65,15 @@ Subsequent configuration is handled by the config file, which should be structur
             }
         },
         {
-            "rewardTitle": "TTS Reward",
-            "action": {
+            "title": "TTS Reward",
+            "sound": {
                 "type": "tts",
                 "text": "This also supports TTS! See above..."
             }
+        },
+        {
+            "title": "Set Veadotube Avatar to 'basic'",
+            "vtubeState": "basic"
         }
     ]
 }
