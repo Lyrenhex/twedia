@@ -61,6 +61,8 @@ var channelID string
 var musicPlayer twedia.Player
 var speechPlayer twedia.Player
 
+var v *veadotube.Veadotube
+
 var lastSpeech time.Time = time.Unix(0, 0)
 
 func init() {
@@ -87,7 +89,12 @@ func init() {
 	musicPlayer = twedia.NewPlayer()
 	speechPlayer = twedia.NewPlayer()
 
-	veadotube.Connect()
+	v, err = veadotube.New()
+	if err != nil {
+		log.Println("Error getting Veadotube instance:", err)
+	} else if v != nil {
+		v.Connect()
+	}
 
 	for {
 		channelID, err = twitch.GetChannelID(config.PubsubOauthToken, config.ClientID)
@@ -101,9 +108,6 @@ func init() {
 			os.Exit(1)
 		}
 	}
-
-	// Seed the random Source such that we don't always listen to Blessed are the Teamakers...
-	rand.Seed(time.Now().UnixNano())
 
 	fmt.Println(`Twedia Music Manager
 	
@@ -295,7 +299,7 @@ func rewardCallback(r twitch.Redemption) {
 		if strings.EqualFold(r.Reward.Title, rewardAction.Title) {
 			completeSoundAction(rewardAction.Sound)
 			if rewardAction.VTubeState != "" {
-				veadotube.SetState(rewardAction.VTubeState)
+				v.SetState(rewardAction.VTubeState)
 			}
 			return
 		}
@@ -377,7 +381,7 @@ func main() {
 				if strings.EqualFold(strings.Split(m.Text, " ")[0], chatCommand.Trigger) {
 					completeSoundAction(chatCommand.Sound)
 					if chatCommand.VTubeState != "" {
-						veadotube.SetState(chatCommand.VTubeState)
+						v.SetState(chatCommand.VTubeState)
 					}
 					return
 				}

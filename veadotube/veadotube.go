@@ -2,7 +2,6 @@ package veadotube
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -15,136 +14,67 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-type instanceData struct {
+type InstanceData struct {
 	Time   int64  `json:"time"`
 	Name   string `json:"name"`
 	Server string `json:"server"`
 }
 
-type stateEventRequestBasic struct {
-	Event   string            `json:"event"`
-	Type    string            `json:"type"`
-	Id      string            `json:"id"`
-	Payload payloadBasicEvent `json:"payload"`
+type Veadotube struct {
+	CurrentInstance InstanceData
+	Connection      *websocket.Conn
+	StateMap        map[string]string
 }
 
-type stateEventRequestWithState struct {
-	Event   string                `json:"event"`
-	Type    string                `json:"type"`
-	Id      string                `json:"id"`
-	Payload payloadEventWithState `json:"payload"`
-}
+var l *log.Logger = log.New(os.Stdout, "[veadotube] ", log.LstdFlags|log.Lshortfile|log.Lmsgprefix)
 
-func newStateEventRequestBasic(payload payloadBasicEvent) string {
-	r, err := json.Marshal(stateEventRequestBasic{
-		Event:   "payload",
-		Type:    "stateEvents",
-		Id:      "mini",
-		Payload: payload,
-	})
-	if err != nil {
-		log.Println("Marshaling state event request: ", err)
-	}
-	return "nodes:" + string(r)
-}
-
-func newStateEventRequestWithState(payload payloadEventWithState) string {
-	r, err := json.Marshal(stateEventRequestWithState{
-		Event:   "payload",
-		Type:    "stateEvents",
-		Id:      "mini",
-		Payload: payload,
-	})
-	if err != nil {
-		log.Println("Marshaling state event request: ", err)
-	}
-	return "nodes:" + string(r)
-}
-
-type payloadBasicEvent struct {
-	Event string `json:"event"`
-}
-
-type payloadEventWithState struct {
-	Event string `json:"event"`
-	State string `json:"state"`
-}
-
-type stateEventResponseList struct {
-	Event   string            `json:"event"`
-	Type    string            `json:"type"`
-	Id      string            `json:"id"`
-	Name    string            `json:"name"`
-	Payload payloadStatesList `json:"payload"`
-}
-
-type stateEventResponsePeek struct {
-	Event   string           `json:"event"`
-	Type    string           `json:"type"`
-	Id      string           `json:"id"`
-	Name    string           `json:"name"`
-	Payload payloadStatePeek `json:"payload"`
-}
-
-type payloadStatesList struct {
-	Event  string          `json:"event"`
-	States []responseState `json:"states"`
-}
-
-type payloadStatePeek struct {
-	Event string `json:"event"`
-	State string `json:"state"`
-}
-
-type responseState struct {
-	Id   string `json:"id"`
-	Name string `json:"name"`
-}
-
-var currentInstance instanceData
-var connection *websocket.Conn
-var stateMap map[string]string = make(map[string]string)
-
-func Connect() {
+// Select a running Veadotube instance from the user's home directory.
+//
+// This function involves direct user input, and may return `nil` on an error
+// or if multiple instances are available to be selected but the user selects
+// none of them.
+func New() (*Veadotube, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		log.Println("Error retrieving home directory: ", err)
-		return
+		l.Println("Error retrieving home directory:", err)
+		return nil, err
 	}
 	s := string(os.PathSeparator)
 	instanceDir := home + s + ".veadotube" + s + "instances"
 	instanceFiles, err := os.ReadDir(instanceDir)
 	if err != nil {
-		log.Println("Error retrieving veadotube instance list: ", err)
-		return
+		l.Println("Error retrieving veadotube instance list:", err)
+		return nil, err
 	}
-	var instances []instanceData
+	var instances []InstanceData
 	for _, f := range instanceFiles {
 		if strings.HasPrefix(f.Name(), "mini-") {
-			i := &instanceData{}
+			i := &InstanceData{}
 			data, err := os.ReadFile(instanceDir + s + f.Name())
 			if err != nil {
-				log.Println("Error reading instance data for "+f.Name()+": ", err)
+				l.Printf("Error reading instance data for %s: %s\n", f.Name(), err)
 				continue
 			}
 			json.Unmarshal(data, i)
 			if (time.Now().Unix() - i.Time) > 10 {
-				log.Println("Skipping stale instance ", f.Name())
+				l.Println("Skipping stale instance", f.Name())
 				continue
 			}
 			if i.Server == "" || i.Server == ":0" {
-				log.Println("Skipping instance with no websocket server ", f.Name())
+				l.Println("Skipping instance with no websocket server", f.Name())
 				continue
 			}
 			instances = append(instances, *i)
 		}
 	}
 
+	v := Veadotube{}
+
 	if len(instances) == 1 {
-		currentInstance = instances[0]
+		v.CurrentInstance = instances[0]
 	} else if len(instances) == 0 {
-		log.Println("No valid instances found.")
-		return
+		l.Println("No valid instances found.")
+		return nil, nil
 	} else {
 		fmt.Println("Found the following running veadotube mini instances:")
 		for i, instance := range instances {
@@ -159,7 +89,7 @@ func Connect() {
 			}
 			opt = strings.ToLower(strings.Replace(strings.Replace(opt, "\n", "", -1), "\r", "", -1))
 			if opt == "" {
-				return
+				return nil, nil
 			}
 			iopt, err := strconv.Atoi(opt)
 			if err != nil {
@@ -170,17 +100,26 @@ func Connect() {
 				fmt.Println("Please enter a valid instance number.")
 				continue
 			}
-			currentInstance = instances[iopt]
+			v.CurrentInstance = instances[iopt]
 			break
 		}
 	}
-	log.Println("Connecting to instance ", currentInstance.Name, "(", currentInstance.Server, ")...")
-	log.Println("Connected.")
-	connection, _, err = websocket.DefaultDialer.Dial("ws://"+currentInstance.Server+"?n=twedia", nil)
+
+	v.StateMap = make(map[string]string)
+
+	return &v, nil
+}
+
+// Connect to the Veadotube instance.
+func (v *Veadotube) Connect() {
+	l.Printf("Connecting to instance %s (%s)...\n", v.CurrentInstance.Name, v.CurrentInstance.Server)
+	var err error
+	v.Connection, _, err = websocket.DefaultDialer.Dial("ws://"+v.CurrentInstance.Server+"?n=twedia", nil)
 	if err != nil {
-		log.Println("Error connecting to veadotube instance: ", err)
+		l.Println("Error connecting to veadotube instance:", err)
 		return
 	}
+	l.Println("Connected.")
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 	go func() {
@@ -191,9 +130,9 @@ func Connect() {
 			select {
 			case <-ticker.C:
 			case <-interrupt:
-				err := connection.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+				err := v.Connection.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 				if err != nil {
-					log.Println("PubSub write close: ", err)
+					l.Println("PubSub write close:", err)
 					return
 				}
 				time.Sleep(time.Second)
@@ -202,40 +141,29 @@ func Connect() {
 		}
 	}()
 
-	err = connection.WriteMessage(websocket.TextMessage, []byte(newStateEventRequestBasic(payloadBasicEvent{
+	go v.listen()
+
+	err = v.Connection.WriteMessage(websocket.TextMessage, []byte(newStateEventRequestBasic(payloadBasicEvent{
 		Event: "list",
 	})))
 	if err != nil {
-		log.Println("Error requesting states list: ", err)
+		l.Println("Error requesting states list:", err)
 		return
-	}
-	_, msg, err := connection.ReadMessage()
-	if err != nil {
-		log.Println("WebSocket read: ", err)
-	}
-	s = string(msg)[6:]
-	msg = bytes.Trim([]byte(s), "\x00")
-	resp := &stateEventResponseList{}
-	err = json.Unmarshal(msg, resp)
-	if err != nil {
-		log.Println("Response unmarshal: ", err)
-	}
-	for _, state := range resp.Payload.States {
-		stateMap[state.Name] = state.Id
 	}
 }
 
-func SetState(state string) {
-	if connection == nil {
-		log.Println("Failed to set veadotube state to '" + state + "': no connection")
+// Set the active Veadotube state to that with the provided state name.
+func (v *Veadotube) SetState(state string) {
+	if v.Connection == nil {
+		l.Printf("Failed to set veadotube state to '%s': no connection\n", state)
 		return
 	}
-	if stateMap[state] == "" {
-		log.Println("Unknown state '" + state + "'.")
+	if v.StateMap[state] == "" {
+		l.Printf("Unknown state '%s'.\n", state)
 		return
 	}
-	connection.WriteMessage(websocket.TextMessage, []byte(newStateEventRequestWithState(payloadEventWithState{
+	v.Connection.WriteMessage(websocket.TextMessage, []byte(newStateEventRequestWithState(payloadEventWithState{
 		Event: "set",
-		State: stateMap[state],
+		State: v.StateMap[state],
 	})))
 }
