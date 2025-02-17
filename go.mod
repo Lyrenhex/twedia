@@ -1,3 +1,4 @@
+// Deprecated: use code.igland.xyz/lyrenhex/twedia instead
 module github.com/lyrenhex/twedia
 
 go 1.21
